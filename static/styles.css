@@ -332,6 +332,26 @@ button:hover {
   margin-bottom: 2px;
 }
 
+.plot-legend {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(215, 220, 227, 0.9);
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+  display: grid;
+  gap: 5px;
+  left: 74px;
+  max-width: min(260px, calc(100% - 110px));
+  padding: 7px 8px;
+  pointer-events: none;
+  position: absolute;
+  top: 10px;
+  z-index: 2;
+}
+
+.plot-legend:empty {
+  display: none;
+}
+
 .mana-pips {
   display: flex;
   gap: 4px;
@@ -346,7 +366,7 @@ button:hover {
 
 .lower-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 0.55fr) minmax(260px, 0.85fr) minmax(360px, 1.35fr);
+  grid-template-columns: minmax(300px, 0.8fr) minmax(420px, 1.2fr);
   gap: 10px;
   min-height: 0;
 }
@@ -363,9 +383,9 @@ button:hover {
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-bottom: 7px;
-  font-size: 13px;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.25;
 }
 
 .swatch {
@@ -610,6 +630,11 @@ button:hover {
 
   .lower-grid {
     grid-template-columns: 1fr;
+  }
+
+  .plot-legend {
+    left: 12px;
+    max-width: calc(100% - 24px);
   }
 
   .archetype-card-row,
