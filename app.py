@@ -1403,6 +1403,7 @@ def collect_decks_and_cards(
     source_value: str,
     progress: Callable[[str], None] | None = None,
     fetch_stats: FetchStats | None = None,
+    empty_search_message: str | None = None,
 ) -> tuple[list[dict], list[dict], dict]:
     if find_compare_table(source) is not None:
         decks, records = parse_compare_html(source, source_value)
@@ -1410,6 +1411,8 @@ def collect_decks_and_cards(
 
     first_page_decks = parse_search_rows(source)
     if not first_page_decks:
+        if source_kind in {"search_builder", "post_body", "curl_post_body", "url"} and find_search_form(source):
+            raise ValueError(empty_search_message or "No MTGTop8 decks matched that search.")
         raise ValueError("Could not find MTGTop8 search results or a compare table in the input.")
 
     total_count = parse_deck_count(source, len(first_page_decks))
@@ -1468,6 +1471,42 @@ def criteria_search_intent(criteria: dict | None) -> tuple[bool, bool]:
     deckish = bool(str(criteria.get("deck") or "").strip() or str(criteria.get("archetype") or "").strip())
     cardish = bool(str(criteria.get("cards") or "").strip())
     return deckish, cardish
+
+
+def no_search_results_message(criteria: dict | None) -> str:
+    if not isinstance(criteria, dict):
+        return "No MTGTop8 decks matched that search."
+
+    cards = str(criteria.get("cards") or "").strip()
+    format_name = str(criteria.get("format") or "").strip()
+    date_start = str(criteria.get("dateStart") or "").strip()
+    date_end = str(criteria.get("dateEnd") or "").strip()
+    main_deck = bool(criteria.get("mainDeck", True))
+    sideboard = bool(criteria.get("sideboard", False))
+
+    zones = []
+    if main_deck:
+        zones.append("main deck")
+    if sideboard:
+        zones.append("sideboard")
+    zone_text = " or ".join(zones) if zones else "selected zones"
+
+    details = []
+    if cards:
+        card_text = ", ".join(line.strip() for line in re.split(r"\r?\n", cards) if line.strip())
+        details.append(f"with {card_text} in the {zone_text}")
+    if format_name:
+        details.append(f"in {format_name}")
+    if date_start or date_end:
+        if date_start and date_end:
+            details.append(f"from {date_start} to {date_end}")
+        elif date_start:
+            details.append(f"from {date_start}")
+        else:
+            details.append(f"through {date_end}")
+
+    suffix = " " + " ".join(details) if details else ""
+    return f"No MTGTop8 decks matched that search{suffix}. Try widening the date range or changing the card/zone filters."
 
 
 def form_search_intent(values: list[tuple[str, str]]) -> tuple[bool, bool]:
@@ -1533,7 +1572,14 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
         source = fetch_url(source_value, stats=fetch_stats)
         source_kind = "url"
 
-    decks, records, input_meta = collect_decks_and_cards(source, source_kind, source_value, progress, fetch_stats)
+    decks, records, input_meta = collect_decks_and_cards(
+        source,
+        source_kind,
+        source_value,
+        progress,
+        fetch_stats,
+        empty_search_message=no_search_results_message(search_criteria),
+    )
     if not records:
         raise ValueError("No card rows found for the selected decks.")
 
@@ -1573,8 +1619,10 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
 
     present = (matrix > 0).sum(axis=0)
     features = matrix.loc[:, (present >= min_decks) & (matrix.var(axis=0) > 0)]
-    if features.shape[0] < 2 or features.shape[1] < 2:
-        raise ValueError("Need at least two variable card columns to plot.")
+    if features.shape[0] < 2:
+        raise ValueError(f"Need at least two decks with {scope} card data to plot.")
+    if features.shape[1] < 2:
+        raise ValueError(f"Need at least two variable {scope} card columns to plot.")
 
     coords, explained_variance, distance_matrix, projection_meta = projection_for_features(features.values, projection)
     coords, duplicate_meta = snap_duplicate_feature_coords(coords, features)
@@ -1736,7 +1784,8 @@ class Handler(BaseHTTPRequestHandler):
                 except (BrokenPipeError, ConnectionResetError):
                     return
                 except Exception as exc:
-                    traceback.print_exc()
+                    if not isinstance(exc, ValueError):
+                        traceback.print_exc()
                     try:
                         send_event({"error": str(exc)})
                     except (BrokenPipeError, ConnectionResetError):
@@ -1745,7 +1794,8 @@ class Handler(BaseHTTPRequestHandler):
 
             self.send_json(200, analyze(payload))
         except Exception as exc:
-            traceback.print_exc()
+            if not isinstance(exc, ValueError):
+                traceback.print_exc()
             self.send_json(400, {"error": str(exc)})
 
 

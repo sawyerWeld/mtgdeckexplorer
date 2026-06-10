@@ -971,8 +971,24 @@ function drawInspector(result) {
   }
 }
 
+function clearAnalysisView(summary = "Fetching decks...") {
+  currentResult = null;
+  selectedInspector = null;
+  expandedArchetypeSections = new Set();
+  plotView = null;
+  plotFrame = null;
+  plotDrag = null;
+  hideTooltip();
+  summaryEl.textContent = summary;
+  metricsEl.innerHTML = "";
+  legendEl.innerHTML = "";
+  plotEl.innerHTML = "";
+  drawInspector(null);
+}
+
 async function analyze() {
   setStatus("Fetching...");
+  clearAnalysisView();
   analyzeButton.disabled = true;
   try {
     const response = await fetch("/api/analyze-stream", {
@@ -1005,6 +1021,7 @@ async function analyze() {
     setStatus(cacheStatus);
   } catch (error) {
     setStatus(error.message, "error");
+    summaryEl.textContent = "No plot generated for this search.";
   } finally {
     analyzeButton.disabled = false;
   }
