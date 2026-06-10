@@ -978,7 +978,7 @@ def projection_for_features(values: np.ndarray, projection: str) -> tuple[np.nda
             coords = reducer.fit_transform(distances)
         return coords, [None, None], distances, {
             "projection": projection,
-            "projection_label": "UMAP (experimental)",
+            "projection_label": "UMAP",
             "axis_labels": ["UMAP1", "UMAP2"],
             "distance_metric": "bray-curtis",
             "umap_neighbors": n_neighbors,
@@ -1005,6 +1005,14 @@ def silhouette_for_labels(values: np.ndarray, labels: np.ndarray, *, distance_ma
         np.fill_diagonal(distances, 0)
         return float(silhouette_score(distances, labels, metric="precomputed"))
     return float(silhouette_score(values, labels))
+
+
+def labels_by_descending_size(labels: np.ndarray) -> np.ndarray:
+    labels = np.asarray(labels, dtype=int)
+    counts = Counter(int(label) for label in labels if int(label) >= 0)
+    ordered = sorted(counts, key=lambda label: (-counts[label], label))
+    remap = {old_label: new_label for new_label, old_label in enumerate(ordered)}
+    return np.array([remap.get(int(label), int(label)) for label in labels], dtype=int)
 
 
 def auto_min_branch_size(n: int) -> int:
@@ -1363,7 +1371,7 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
     min_decks = max(1, int(payload.get("minDecks") or 2))
     cluster_k = max(1, int(payload.get("clusterK") or 2))
     scale_clusters = bool(payload.get("scaleClusters", True))
-    projection = payload.get("projection") or "pcoa_braycurtis"
+    projection = payload.get("projection") or "umap_braycurtis"
     cluster_method_requested = payload.get("clusterMethod") or "auto"
     cluster_space = str(payload.get("clusterSpace") or "plot")
     if cluster_space not in {"deck", "plot"}:
@@ -1406,6 +1414,7 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
         scale_clusters=scale_clusters,
         outlier_mode=outlier_mode,
     )
+    labels = labels_by_descending_size(labels)
 
     points = []
     for i, deck_id in enumerate(features.index):
