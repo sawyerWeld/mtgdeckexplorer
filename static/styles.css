@@ -437,8 +437,7 @@ button:hover {
   font-size: 13px;
 }
 
-.archetype-heading span,
-.archetype-more {
+.archetype-heading span {
   color: var(--muted);
   font-size: 12px;
 }
@@ -454,9 +453,25 @@ button:hover {
 }
 
 .archetype-section-title {
+  align-items: center;
   color: #364152;
+  display: flex;
   font-size: 12px;
   font-weight: 750;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.archetype-expand {
+  background: #eef2f7;
+  color: #364152;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 4px 7px;
+}
+
+.archetype-expand:hover {
+  background: #dde6f2;
 }
 
 .archetype-card-row {
@@ -526,10 +541,6 @@ button:hover {
   font-size: 12px;
   font-weight: 700;
   text-align: right;
-}
-
-.archetype-more {
-  padding-top: 1px;
 }
 
 .axis text {

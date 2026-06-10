@@ -42,6 +42,7 @@ const colors = [
 
 let currentResult = null;
 let selectedArchetypeCluster = null;
+let expandedArchetypeSections = new Set();
 let searchOptions = {
   formats: [{ value: "", label: "All" }],
   archetypes: {},
@@ -374,6 +375,7 @@ function bindPointEvents(points) {
 function renderResult(result) {
   currentResult = result;
   selectedArchetypeCluster = null;
+  expandedArchetypeSections = new Set();
   const d = result.diagnostics;
   const xLabel = d.axis_labels?.[0] || "Axis 1";
   const yLabel = d.axis_labels?.[1] || "Axis 2";
@@ -520,16 +522,22 @@ function archetypeCardRow(card, n, color) {
   `;
 }
 
-function archetypeSection(section, n, color) {
-  const rows = section.cards.map((card) => archetypeCardRow(card, n, color)).join("");
-  const more = section.omitted
-    ? `<div class="archetype-more">+ ${section.omitted} more</div>`
+function archetypeSection(section, n, color, cluster) {
+  const sectionKey = `${cluster}:${section.key}`;
+  const expanded = expandedArchetypeSections.has(sectionKey);
+  const hiddenCards = section.cards.filter((card) => Number(card.played_pct || 0) <= 0.1);
+  const visibleCards = expanded ? section.cards : section.cards.filter((card) => Number(card.played_pct || 0) > 0.1);
+  const rows = visibleCards.map((card) => archetypeCardRow(card, n, color)).join("");
+  const expandButton = hiddenCards.length
+    ? `<button class="archetype-expand" type="button" data-section="${escapeHtml(sectionKey)}">${expanded ? "Collapse" : `Expand ${hiddenCards.length}`}</button>`
     : "";
   return `
-    <section class="archetype-section">
-      <div class="archetype-section-title">${escapeHtml(section.label)}</div>
+    <section class="archetype-section" data-section="${escapeHtml(sectionKey)}">
+      <div class="archetype-section-title">
+        <span>${escapeHtml(section.label)}</span>
+        ${expandButton}
+      </div>
       ${rows || `<div class="cluster-detail">No cards.</div>`}
-      ${more}
     </section>
   `;
 }
@@ -544,7 +552,7 @@ function drawClusterArchetypes(result) {
   const selected = ensureSelectedArchetypeCluster(result);
   const color = clusterColor(selected.cluster);
   const sections = selected.sections.length
-    ? selected.sections.map((section) => archetypeSection(section, selected.n, color)).join("")
+    ? selected.sections.map((section) => archetypeSection(section, selected.n, color, selected.cluster)).join("")
     : `<div class="cluster-detail">No card-level data for this cluster.</div>`;
 
   archetypeViewerEl.innerHTML = `
@@ -554,6 +562,18 @@ function drawClusterArchetypes(result) {
     </div>
     <div class="archetype-sections">${sections}</div>
   `;
+
+  archetypeViewerEl.querySelectorAll("button[data-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const sectionKey = button.dataset.section;
+      if (expandedArchetypeSections.has(sectionKey)) {
+        expandedArchetypeSections.delete(sectionKey);
+      } else {
+        expandedArchetypeSections.add(sectionKey);
+      }
+      drawClusterArchetypes(result);
+    });
+  });
 }
 
 async function analyze() {

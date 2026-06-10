@@ -682,7 +682,6 @@ CLUSTER_ARCHETYPE_SECTIONS = [
     ("OTHER SPELLS", "Other Spells"),
     ("SIDEBOARDS", "Sideboard"),
 ]
-CLUSTER_ARCHETYPE_CARD_LIMIT = 28
 
 
 def build_cluster_archetypes(
@@ -757,8 +756,7 @@ def build_cluster_archetypes(
                 {
                     "key": section_key.lower().replace(" ", "_"),
                     "label": section_label,
-                    "cards": cards[:CLUSTER_ARCHETYPE_CARD_LIMIT],
-                    "omitted": max(0, len(cards) - CLUSTER_ARCHETYPE_CARD_LIMIT),
+                    "cards": cards,
                 }
             )
 
