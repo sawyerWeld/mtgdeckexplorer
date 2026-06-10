@@ -62,6 +62,14 @@ let searchOptions = {
 };
 const defaultSearchFormat = "PAU";
 const defaultSearchDateStart = "2026-01-01";
+const defaultAliasesByFormat = {
+  PAU: [
+    "Dorks: Llanowar Elves, Fyndhorn Elves, Elvish Mystic",
+    "Helix: Retraction Helix, Banishing Knack",
+  ].join("\n"),
+};
+let aliasDefaultsFormat = null;
+let aliasesTouched = false;
 
 function setStatus(text, kind = "idle") {
   statusEl.textContent = text;
@@ -113,6 +121,18 @@ function applySearchDefaults() {
   }
 }
 
+function applyAliasDefaults() {
+  if (aliasesTouched) return;
+  const previousDefault = aliasDefaultsFormat ? defaultAliasesByFormat[aliasDefaultsFormat] || "" : "";
+  if (cardAliasesEl.value.trim() && cardAliasesEl.value.trim() !== previousDefault.trim()) {
+    aliasesTouched = true;
+    return;
+  }
+  const nextDefault = defaultAliasesByFormat[searchFormatEl.value] || "";
+  cardAliasesEl.value = nextDefault;
+  aliasDefaultsFormat = nextDefault ? searchFormatEl.value : null;
+}
+
 function updateArchetypeOptions() {
   const options = searchOptions.archetypes[searchFormatEl.value] || [{ value: "", label: "All" }];
   populateSelect(searchArchetypeEl, options);
@@ -140,6 +160,7 @@ function populateSearchOptions(options) {
   };
   populateSelect(searchFormatEl, searchOptions.formats);
   applySearchDefaults();
+  applyAliasDefaults();
   renderLevelChecks();
   updateArchetypeOptions();
 }
@@ -1026,7 +1047,13 @@ async function readAnalysisStream(response) {
   return result;
 }
 
-searchFormatEl.addEventListener("change", updateArchetypeOptions);
+cardAliasesEl.addEventListener("input", () => {
+  aliasesTouched = true;
+});
+searchFormatEl.addEventListener("change", () => {
+  updateArchetypeOptions();
+  applyAliasDefaults();
+});
 clusterMethodEl.addEventListener("change", updateClusterControls);
 analyzeButton.addEventListener("click", analyze);
 plotZoomInButton.addEventListener("click", () => setPlotViewAround(null, 0.75));
@@ -1042,4 +1069,5 @@ window.addEventListener("resize", () => {
 });
 updateClusterControls();
 applySearchDefaults();
+applyAliasDefaults();
 loadSearchOptions();
