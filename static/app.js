@@ -343,6 +343,14 @@ function varianceMetric(value) {
   return value == null ? "n/a" : `${(Number(value || 0) * 100).toFixed(1)}%`;
 }
 
+function plotDensityMode(result = currentResult) {
+  const points = result?.points || [];
+  const clusterCount = new Set(points.map((point) => Number(point.cluster))).size;
+  if (points.length > 5000) return "huge";
+  if (points.length > 2000 || clusterCount > 24) return "dense";
+  return "normal";
+}
+
 function selectedClusterId() {
   if (!currentResult || !selectedInspector) return null;
   if (selectedInspector.type === "cluster") return Number(selectedInspector.cluster);
@@ -510,6 +518,7 @@ function drawPlot(result) {
   svg += `<text transform="translate(18 ${margin.top + innerH / 2}) rotate(-90)" text-anchor="middle" fill="#364152" font-size="12">${escapeHtml(yAxis)}</text>`;
 
   const selectedCluster = selectedClusterId();
+  const densityMode = plotDensityMode(result);
   const clusters = new Map();
   points.forEach((point) => {
     const cluster = Number(point.cluster);
@@ -518,6 +527,7 @@ function drawPlot(result) {
     clusters.get(cluster).push({ x: sx(point.x), y: sy(point.y) });
   });
   [...clusters.entries()].forEach(([cluster, clusterPoints]) => {
+    if (densityMode !== "normal" && Number(cluster) !== Number(selectedCluster)) return;
     const color = clusterColor(cluster);
     const active = Number(cluster) === Number(selectedCluster) ? " selected" : "";
     svg += clusterRegionMarkup(cluster, clusterPoints, color, active);
@@ -540,7 +550,7 @@ function drawPlot(result) {
         `data-index="${index}" fill="${color}"`
       );
     } else {
-      const hitRadius = Math.max(12, radius + 5);
+      const hitRadius = pointHitRadius(radius);
       svg += `<circle class="point-shape point-dot${selectedClass}" cx="${x}" cy="${y}" r="${radius}" fill="${color}"/>`;
       svg += `<circle class="point" data-index="${index}" cx="${x}" cy="${y}" r="${hitRadius}" fill="transparent"/>`;
     }
@@ -560,8 +570,18 @@ function drawPlot(result) {
 }
 
 function pointRadius(point) {
-  if (point.featured_finish) return 13.5;
+  const densityMode = plotDensityMode();
+  if (point.featured_finish) return densityMode === "huge" ? 11 : densityMode === "dense" ? 12 : 13.5;
+  if (densityMode === "huge") return 4.2;
+  if (densityMode === "dense") return 5;
   return 6.5;
+}
+
+function pointHitRadius(radius) {
+  const densityMode = plotDensityMode();
+  if (densityMode === "huge") return Math.max(6, radius + 2);
+  if (densityMode === "dense") return Math.max(8, radius + 3);
+  return Math.max(12, radius + 5);
 }
 
 function starPath(cx, cy, radius, className = "point-star", attrs = "") {
@@ -723,6 +743,7 @@ function drawLegend(result) {
   const counts = new Map();
   result.points.forEach((point) => counts.set(point.cluster, (counts.get(point.cluster) || 0) + 1));
   const activeCluster = selectedClusterId();
+  legendEl.classList.toggle("compact", plotDensityMode(result) !== "normal");
   legendEl.innerHTML = [...counts.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([cluster, count]) => `
