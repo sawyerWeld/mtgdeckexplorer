@@ -351,6 +351,12 @@ button:hover {
   width: 100%;
   height: 100%;
   min-height: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+#plot.is-panning {
+  cursor: grabbing;
 }
 
 .tooltip {
@@ -390,6 +396,40 @@ button:hover {
 
 .plot-legend:empty {
   display: none;
+}
+
+.plot-tools {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(215, 220, 227, 0.9);
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  pointer-events: auto;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 3;
+}
+
+.plot-tools button {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: #364152;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 750;
+  height: 28px;
+  justify-content: center;
+  min-width: 28px;
+  padding: 0 8px;
+}
+
+.plot-tools button:hover {
+  background: #eef2f7;
 }
 
 .mana-pips {

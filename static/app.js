@@ -22,6 +22,9 @@ const scaleClustersEl = document.querySelector("#scaleClusters");
 const analyzeButton = document.querySelector("#analyzeButton");
 const statusEl = document.querySelector("#status");
 const plotEl = document.querySelector("#plot");
+const plotZoomInButton = document.querySelector("#plotZoomIn");
+const plotZoomOutButton = document.querySelector("#plotZoomOut");
+const plotResetButton = document.querySelector("#plotReset");
 const tooltipEl = document.querySelector("#tooltip");
 const metricsEl = document.querySelector("#metrics");
 const summaryEl = document.querySelector("#summary");
@@ -42,6 +45,10 @@ const colors = [
 let currentResult = null;
 let selectedInspector = null;
 let expandedArchetypeSections = new Set();
+let plotView = null;
+let plotFrame = null;
+let plotDrag = null;
+let suppressPlotClickUntil = 0;
 let searchOptions = {
   formats: [{ value: "", label: "All" }],
   archetypes: {},
@@ -187,6 +194,131 @@ function paddedExtent(values) {
   }
   const pad = (max - min) * 0.08;
   return [min - pad, max + pad];
+}
+
+function basePlotDomain(points) {
+  const [xMin, xMax] = paddedExtent(points.map((point) => point.x));
+  const [yMin, yMax] = paddedExtent(points.map((point) => point.y));
+  return { xMin, xMax, yMin, yMax };
+}
+
+function ensurePlotView(points) {
+  if (!plotView) {
+    const base = basePlotDomain(points);
+    plotView = { ...base, base };
+  }
+  return plotView;
+}
+
+function plotSpans(view = plotView) {
+  return {
+    x: Math.max(1e-9, Number(view.xMax) - Number(view.xMin)),
+    y: Math.max(1e-9, Number(view.yMax) - Number(view.yMin)),
+  };
+}
+
+function plotCenter(view = plotView) {
+  return {
+    x: (Number(view.xMin) + Number(view.xMax)) / 2,
+    y: (Number(view.yMin) + Number(view.yMax)) / 2,
+  };
+}
+
+function screenPointToData(clientX, clientY) {
+  if (!plotView || !plotFrame) return null;
+  const rect = plotEl.getBoundingClientRect();
+  const x = Math.max(plotFrame.margin.left, Math.min(clientX - rect.left, plotFrame.margin.left + plotFrame.innerW));
+  const y = Math.max(plotFrame.margin.top, Math.min(clientY - rect.top, plotFrame.margin.top + plotFrame.innerH));
+  const spans = plotSpans();
+  return {
+    x: plotView.xMin + ((x - plotFrame.margin.left) / plotFrame.innerW) * spans.x,
+    y: plotView.yMax - ((y - plotFrame.margin.top) / plotFrame.innerH) * spans.y,
+  };
+}
+
+function setPlotViewAround(anchor, zoomFactor) {
+  if (!currentResult) return;
+  const view = ensurePlotView(currentResult.points);
+  const spans = plotSpans(view);
+  const baseSpans = plotSpans(view.base);
+  const minXSpan = baseSpans.x * 0.003;
+  const minYSpan = baseSpans.y * 0.003;
+  const maxXSpan = baseSpans.x * 80;
+  const maxYSpan = baseSpans.y * 80;
+  const xSpan = Math.max(minXSpan, Math.min(maxXSpan, spans.x * zoomFactor));
+  const ySpan = Math.max(minYSpan, Math.min(maxYSpan, spans.y * zoomFactor));
+  const center = plotCenter(view);
+  const focus = anchor || center;
+  const xRatio = (focus.x - view.xMin) / spans.x;
+  const yRatio = (focus.y - view.yMin) / spans.y;
+  plotView = {
+    ...view,
+    xMin: focus.x - xRatio * xSpan,
+    xMax: focus.x + (1 - xRatio) * xSpan,
+    yMin: focus.y - yRatio * ySpan,
+    yMax: focus.y + (1 - yRatio) * ySpan,
+  };
+  drawPlot(currentResult);
+}
+
+function resetPlotView() {
+  if (!currentResult) return;
+  const base = basePlotDomain(currentResult.points);
+  plotView = { ...base, base };
+  drawPlot(currentResult);
+}
+
+function startPlotPan(event) {
+  if (!currentResult || event.button !== 0) return;
+  if (event.target.closest?.(".point")) return;
+  ensurePlotView(currentResult.points);
+  plotDrag = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    moved: false,
+    view: { ...plotView },
+  };
+  plotEl.setPointerCapture?.(event.pointerId);
+}
+
+function movePlotPan(event) {
+  if (!plotDrag || plotDrag.pointerId !== event.pointerId || !currentResult) return;
+  const dx = event.clientX - plotDrag.startX;
+  const dy = event.clientY - plotDrag.startY;
+  if (!plotDrag.moved && Math.hypot(dx, dy) < 3) return;
+  plotDrag.moved = true;
+  plotEl.classList.add("is-panning");
+  hideTooltip();
+
+  const spans = plotSpans(plotDrag.view);
+  const xShift = -(dx / plotFrame.innerW) * spans.x;
+  const yShift = (dy / plotFrame.innerH) * spans.y;
+  plotView = {
+    ...plotDrag.view,
+    xMin: plotDrag.view.xMin + xShift,
+    xMax: plotDrag.view.xMax + xShift,
+    yMin: plotDrag.view.yMin + yShift,
+    yMax: plotDrag.view.yMax + yShift,
+  };
+  drawPlot(currentResult);
+}
+
+function endPlotPan(event) {
+  if (!plotDrag || plotDrag.pointerId !== event.pointerId) return;
+  if (plotDrag.moved) suppressPlotClickUntil = Date.now() + 200;
+  plotEl.releasePointerCapture?.(event.pointerId);
+  plotEl.classList.remove("is-panning");
+  plotDrag = null;
+}
+
+function handlePlotWheel(event) {
+  if (!currentResult) return;
+  event.preventDefault();
+  ensurePlotView(currentResult.points);
+  const anchor = screenPointToData(event.clientX, event.clientY);
+  const zoomFactor = event.deltaY < 0 ? 0.82 : 1.22;
+  setPlotViewAround(anchor, zoomFactor);
 }
 
 function niceTicks(min, max, count = 6) {
@@ -344,8 +476,9 @@ function drawPlot(result) {
   const margin = { top: 28, right: 32, bottom: 54, left: 66 };
   const innerW = width - margin.left - margin.right;
   const innerH = height - margin.top - margin.bottom;
-  const [minX, maxX] = paddedExtent(points.map((point) => point.x));
-  const [minY, maxY] = paddedExtent(points.map((point) => point.y));
+  plotFrame = { width, height, margin, innerW, innerH };
+  const view = ensurePlotView(points);
+  const { xMin: minX, xMax: maxX, yMin: minY, yMax: maxY } = view;
   const sx = (value) => margin.left + ((value - minX) / (maxX - minX)) * innerW;
   const sy = (value) => margin.top + innerH - ((value - minY) / (maxY - minY)) * innerH;
 
@@ -464,6 +597,10 @@ function manaPips(colors) {
   `;
 }
 
+function hideTooltip() {
+  tooltipEl.hidden = true;
+}
+
 function bindPointEvents(points) {
   document.querySelectorAll(".point").forEach((node) => {
     const updateTooltip = (event) => {
@@ -498,9 +635,6 @@ function bindPointEvents(points) {
       tooltipEl.style.left = `${left}px`;
       tooltipEl.style.top = `${top}px`;
     };
-    const hideTooltip = () => {
-      tooltipEl.hidden = true;
-    };
     node.addEventListener("mouseenter", updateTooltip);
     node.addEventListener("mousemove", updateTooltip);
     node.addEventListener("mouseleave", hideTooltip);
@@ -510,6 +644,7 @@ function bindPointEvents(points) {
     node.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (Date.now() < suppressPlotClickUntil) return;
       const point = points[Number(event.currentTarget.dataset.index)];
       if (point) selectDeck(point.deck_id);
     });
@@ -521,6 +656,7 @@ function bindHullEvents() {
     node.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (Date.now() < suppressPlotClickUntil) return;
       selectCluster(event.currentTarget.dataset.cluster);
     });
   });
@@ -530,6 +666,8 @@ function renderResult(result) {
   currentResult = result;
   expandedArchetypeSections = new Set();
   selectedInspector = null;
+  plotView = null;
+  plotDrag = null;
   const d = result.diagnostics;
   const cache = d.cache || {};
   const cacheValue = Number(cache.total || 0) ? `${cache.hits}/${cache.total}` : "n/a";
@@ -867,6 +1005,14 @@ async function readAnalysisStream(response) {
 searchFormatEl.addEventListener("change", updateArchetypeOptions);
 clusterMethodEl.addEventListener("change", updateClusterControls);
 analyzeButton.addEventListener("click", analyze);
+plotZoomInButton.addEventListener("click", () => setPlotViewAround(null, 0.75));
+plotZoomOutButton.addEventListener("click", () => setPlotViewAround(null, 1.33));
+plotResetButton.addEventListener("click", resetPlotView);
+plotEl.addEventListener("wheel", handlePlotWheel, { passive: false });
+plotEl.addEventListener("pointerdown", startPlotPan);
+plotEl.addEventListener("pointermove", movePlotPan);
+plotEl.addEventListener("pointerup", endPlotPan);
+plotEl.addEventListener("pointercancel", endPlotPan);
 window.addEventListener("resize", () => {
   if (currentResult) drawPlot(currentResult);
 });
