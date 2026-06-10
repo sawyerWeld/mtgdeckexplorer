@@ -43,7 +43,7 @@ textarea {
   height: 100vh;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(300px, 360px) 1fr;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(330px, 420px);
   overflow: hidden;
 }
 
@@ -55,7 +55,15 @@ textarea {
   flex-direction: column;
   gap: 11px;
   min-height: 0;
+  overflow: hidden;
+}
+
+.controls-scroll {
+  display: grid;
+  gap: 11px;
+  min-height: 0;
   overflow: auto;
+  padding-right: 2px;
 }
 
 .brand-row,
@@ -249,6 +257,15 @@ button:hover {
   width: 100%;
 }
 
+.controls-actions {
+  background: var(--panel);
+  border-top: 1px solid var(--soft-line);
+  display: grid;
+  gap: 7px;
+  margin-top: auto;
+  padding-top: 10px;
+}
+
 .search-builder {
   display: grid;
   gap: 10px;
@@ -276,9 +293,33 @@ button:hover {
   min-height: 0;
   padding: 14px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) minmax(180px, 0.38fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
   overflow: hidden;
+}
+
+.inspector-panel {
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.inspector-content {
+  display: grid;
+  gap: 12px;
+}
+
+.inspector-empty {
+  align-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  min-height: 160px;
+  padding: 16px;
 }
 
 .metrics {
@@ -342,7 +383,7 @@ button:hover {
   left: 74px;
   max-width: min(260px, calc(100% - 110px));
   padding: 7px 8px;
-  pointer-events: none;
+  pointer-events: auto;
   position: absolute;
   top: 10px;
   z-index: 2;
@@ -364,28 +405,24 @@ button:hover {
   display: block;
 }
 
-.lower-grid {
-  display: grid;
-  grid-template-columns: minmax(300px, 0.8fr) minmax(420px, 1.2fr);
-  gap: 10px;
-  min-height: 0;
-}
-
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px;
-  min-height: 0;
-  overflow: auto;
-}
-
 .legend-item {
   display: flex;
   align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: #364152;
   gap: 7px;
   font-size: 12px;
+  font-weight: 600;
   line-height: 1.25;
+  padding: 2px 3px;
+  text-align: left;
+}
+
+.legend-item:hover,
+.legend-item.active {
+  background: #eef2f7;
 }
 
 .swatch {
@@ -405,61 +442,99 @@ button:hover {
   color: var(--ink);
 }
 
-.cluster-card {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--cluster-color);
-  border-radius: 6px;
-  color: var(--muted);
-  cursor: pointer;
-  display: block;
-  font-weight: 400;
-  padding: 8px 9px;
-  text-align: left;
-  width: 100%;
-}
-
-.cluster-card:hover {
-  background: #f8fafc;
-}
-
-.cluster-card.active {
-  background: #f1f5fa;
-  border-color: #b8c6da;
-  border-left-color: var(--cluster-color);
-}
-
-.cluster-card:focus-visible {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
-  outline: none;
-}
-
-#cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 12px;
-}
-
-#archetypeViewer {
-  display: grid;
-  gap: 10px;
-}
-
-.archetype-heading {
+.inspector-heading {
   align-items: baseline;
   border-bottom: 1px solid var(--soft-line);
   display: flex;
   gap: 8px;
+  justify-content: space-between;
   padding-bottom: 8px;
 }
 
-.archetype-heading strong {
-  font-size: 13px;
+.inspector-heading h2 {
+  font-size: 17px;
+  line-height: 1.2;
 }
 
-.archetype-heading span {
+.inspector-heading p,
+.inspector-section h3,
+.decklist-section h3,
+.deck-event,
+.deck-meta-grid {
   color: var(--muted);
+}
+
+.inspector-section {
+  display: grid;
+  gap: 8px;
+}
+
+.inspector-section h3,
+.decklist-section h3 {
   font-size: 12px;
+  margin: 0;
+}
+
+.inspector-swatch {
+  border-radius: 50%;
+  display: block;
+  flex: 0 0 auto;
+  height: 12px;
+  margin-top: 4px;
+  width: 12px;
+}
+
+.deck-meta-grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 1fr 1fr;
+  font-size: 12px;
+}
+
+.deck-event {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.external-link {
+  align-items: center;
+  background: var(--ink);
+  border-radius: 6px;
+  color: white;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 650;
+  justify-content: center;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+
+.external-link:hover {
+  background: #303949;
+}
+
+.decklist {
+  display: grid;
+  gap: 12px;
+}
+
+.decklist-section {
+  display: grid;
+  gap: 4px;
+}
+
+.decklist-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 24px 1fr;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.decklist-count {
+  color: #364152;
+  font-weight: 750;
+  text-align: right;
 }
 
 .archetype-sections {
@@ -578,12 +653,27 @@ button:hover {
 }
 
 .point,
-.point-link {
+.point-link,
+.cluster-hull {
   cursor: pointer;
 }
 
 .point {
   pointer-events: all;
+}
+
+.cluster-hull {
+  fill-opacity: 0.08;
+  pointer-events: all;
+  stroke-opacity: 0.35;
+  stroke-width: 1.5;
+}
+
+.cluster-hull:hover,
+.cluster-hull.selected {
+  fill-opacity: 0.13;
+  stroke-opacity: 0.72;
+  stroke-width: 2;
 }
 
 .point-shape {
@@ -596,6 +686,11 @@ button:hover {
   stroke-width: 2;
 }
 
+.point-shape.selected {
+  stroke: #111827;
+  stroke-width: 3;
+}
+
 .big-star-point {
   stroke: var(--highlight);
   stroke-width: 2.4;
@@ -603,6 +698,11 @@ button:hover {
 
 .point-link:hover .big-star-point {
   stroke: var(--highlight);
+  stroke-width: 3;
+}
+
+.big-star-point.selected {
+  stroke: #111827;
   stroke-width: 3;
 }
 
@@ -625,11 +725,13 @@ button:hover {
 
   .workspace {
     overflow: visible;
-    grid-template-rows: auto 420px auto;
+    grid-template-rows: auto 420px;
   }
 
-  .lower-grid {
-    grid-template-columns: 1fr;
+  .inspector-panel {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    overflow: visible;
   }
 
   .plot-legend {

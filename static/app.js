@@ -26,8 +26,7 @@ const tooltipEl = document.querySelector("#tooltip");
 const metricsEl = document.querySelector("#metrics");
 const summaryEl = document.querySelector("#summary");
 const legendEl = document.querySelector("#legend");
-const cardsEl = document.querySelector("#cards");
-const archetypeViewerEl = document.querySelector("#archetypeViewer");
+const inspectorEl = document.querySelector("#inspector");
 
 const colors = [
   "#2b6cb0",
@@ -41,7 +40,7 @@ const colors = [
 ];
 
 let currentResult = null;
-let selectedArchetypeCluster = null;
+let selectedInspector = null;
 let expandedArchetypeSections = new Set();
 let searchOptions = {
   formats: [{ value: "", label: "All" }],
@@ -212,6 +211,80 @@ function varianceMetric(value) {
   return value == null ? "n/a" : `${(Number(value || 0) * 100).toFixed(1)}%`;
 }
 
+function selectedClusterId() {
+  if (!currentResult || !selectedInspector) return null;
+  if (selectedInspector.type === "cluster") return Number(selectedInspector.cluster);
+  if (selectedInspector.type === "deck") {
+    const point = currentResult.points.find((candidate) => String(candidate.deck_id) === String(selectedInspector.deckId));
+    return point ? Number(point.cluster) : null;
+  }
+  return null;
+}
+
+function selectCluster(cluster) {
+  if (!currentResult) return;
+  selectedInspector = { type: "cluster", cluster: Number(cluster) };
+  expandedArchetypeSections = new Set();
+  drawPlot(currentResult);
+  drawLegend(currentResult);
+  drawInspector(currentResult);
+}
+
+function selectDeck(deckId) {
+  if (!currentResult) return;
+  selectedInspector = { type: "deck", deckId: String(deckId) };
+  drawPlot(currentResult);
+  drawLegend(currentResult);
+  drawInspector(currentResult);
+}
+
+function cross(origin, a, b) {
+  return (a.x - origin.x) * (b.y - origin.y) - (a.y - origin.y) * (b.x - origin.x);
+}
+
+function convexHull(points) {
+  const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  if (sorted.length <= 2) return sorted;
+
+  const lower = [];
+  sorted.forEach((point) => {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+      lower.pop();
+    }
+    lower.push(point);
+  });
+
+  const upper = [];
+  [...sorted].reverse().forEach((point) => {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+      upper.pop();
+    }
+    upper.push(point);
+  });
+
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
+}
+
+function paddedHullPoints(points, pad = 13) {
+  const hull = convexHull(points);
+  if (hull.length < 3) return [];
+  const center = hull.reduce(
+    (sum, point) => ({ x: sum.x + point.x / hull.length, y: sum.y + point.y / hull.length }),
+    { x: 0, y: 0 }
+  );
+  return hull.map((point) => {
+    const dx = point.x - center.x;
+    const dy = point.y - center.y;
+    const length = Math.hypot(dx, dy) || 1;
+    return {
+      x: point.x + (dx / length) * pad,
+      y: point.y + (dy / length) * pad,
+    };
+  });
+}
+
 function drawPlot(result) {
   const points = result.points;
   const diagnostics = result.diagnostics;
@@ -254,27 +327,46 @@ function drawPlot(result) {
   svg += `<text x="${margin.left + innerW / 2}" y="${height - 4}" text-anchor="middle" fill="#364152" font-size="12">${escapeHtml(xAxis)}</text>`;
   svg += `<text transform="translate(18 ${margin.top + innerH / 2}) rotate(-90)" text-anchor="middle" fill="#364152" font-size="12">${escapeHtml(yAxis)}</text>`;
 
+  const selectedCluster = selectedClusterId();
+  const clusters = new Map();
+  points.forEach((point) => {
+    const cluster = Number(point.cluster);
+    if (cluster < 0) return;
+    if (!clusters.has(cluster)) clusters.set(cluster, []);
+    clusters.get(cluster).push({ x: sx(point.x), y: sy(point.y) });
+  });
+  [...clusters.entries()].forEach(([cluster, clusterPoints]) => {
+    const hull = paddedHullPoints(clusterPoints);
+    if (hull.length < 3) return;
+    const color = clusterColor(cluster);
+    const active = Number(cluster) === Number(selectedCluster) ? " selected" : "";
+    svg += `<polygon class="cluster-hull${active}" data-cluster="${cluster}" points="${hull
+      .map((point) => `${point.x},${point.y}`)
+      .join(" ")}" fill="${color}" stroke="${color}"/>`;
+  });
+
   const renderPoint = (point, index) => {
     const x = sx(point.x);
     const y = sy(point.y);
     const color = clusterColor(point.cluster);
-    const href = escapeHtml(point.deck_url || `https://www.mtgtop8.com/event?d=${point.deck_id}`);
     const radius = pointRadius(point);
-    svg += `<a class="point-link" href="${href}" target="_blank" rel="noopener">`;
+    const selected = selectedInspector?.type === "deck" && String(selectedInspector.deckId) === String(point.deck_id);
+    const selectedClass = selected ? " selected" : "";
+    svg += `<g class="point-link" data-index="${index}">`;
     if (point.featured_finish) {
       svg += starPath(
         x,
         y,
         radius,
-        "point point-shape point-star big-star-point",
+        `point point-shape point-star big-star-point${selectedClass}`,
         `data-index="${index}" fill="${color}"`
       );
     } else {
       const hitRadius = Math.max(12, radius + 5);
-      svg += `<circle class="point-shape point-dot" cx="${x}" cy="${y}" r="${radius}" fill="${color}"/>`;
+      svg += `<circle class="point-shape point-dot${selectedClass}" cx="${x}" cy="${y}" r="${radius}" fill="${color}"/>`;
       svg += `<circle class="point" data-index="${index}" cx="${x}" cy="${y}" r="${hitRadius}" fill="transparent"/>`;
     }
-    svg += `</a>`;
+    svg += `</g>`;
   };
 
   points.forEach((point, index) => {
@@ -286,6 +378,7 @@ function drawPlot(result) {
 
   plotEl.innerHTML = svg;
   bindPointEvents(points);
+  bindHullEvents();
 }
 
 function pointRadius(point) {
@@ -369,13 +462,29 @@ function bindPointEvents(points) {
     node.addEventListener("pointerenter", updateTooltip);
     node.addEventListener("pointermove", updateTooltip);
     node.addEventListener("pointerleave", hideTooltip);
+    node.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const point = points[Number(event.currentTarget.dataset.index)];
+      if (point) selectDeck(point.deck_id);
+    });
+  });
+}
+
+function bindHullEvents() {
+  document.querySelectorAll(".cluster-hull").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      selectCluster(event.currentTarget.dataset.cluster);
+    });
   });
 }
 
 function renderResult(result) {
   currentResult = result;
-  selectedArchetypeCluster = null;
   expandedArchetypeSections = new Set();
+  selectedInspector = null;
   const d = result.diagnostics;
   const xLabel = d.axis_labels?.[0] || "Axis 1";
   const yLabel = d.axis_labels?.[1] || "Axis 2";
@@ -404,70 +513,41 @@ function renderResult(result) {
       : `${d.scale_clusters ? "standardized" : "raw"} ${d.cluster_method}`;
   const clusterSpace = d.cluster_space === "plot" ? "plot-space" : "deck-space";
   summaryEl.textContent = `${d.scope} · ${d.projection_label} · ${clusterSpace} ${clusterNote}`;
+  ensureSelectedCluster(result);
   drawPlot(result);
   drawLegend(result);
-  drawCards(result);
-  drawClusterArchetypes(result);
+  drawInspector(result);
 }
 
-function ensureSelectedArchetypeCluster(result) {
+function ensureSelectedCluster(result) {
   const clusters = result.cluster_archetypes || [];
   if (!clusters.length) return null;
+  const defaultCluster = (clusters.find((cluster) => Number(cluster.cluster) >= 0) || clusters[0]).cluster;
   if (
-    selectedArchetypeCluster === null ||
-    !clusters.some((cluster) => Number(cluster.cluster) === Number(selectedArchetypeCluster))
+    selectedInspector?.type !== "cluster" ||
+    !clusters.some((cluster) => Number(cluster.cluster) === Number(selectedInspector.cluster))
   ) {
-    selectedArchetypeCluster = (clusters.find((cluster) => Number(cluster.cluster) >= 0) || clusters[0]).cluster;
+    selectedInspector = { type: "cluster", cluster: defaultCluster };
   }
-  return clusters.find((cluster) => Number(cluster.cluster) === Number(selectedArchetypeCluster)) || clusters[0];
+  return clusters.find((cluster) => Number(cluster.cluster) === Number(selectedInspector.cluster)) || clusters[0];
 }
 
 function drawLegend(result) {
   const counts = new Map();
   result.points.forEach((point) => counts.set(point.cluster, (counts.get(point.cluster) || 0) + 1));
+  const activeCluster = selectedClusterId();
   legendEl.innerHTML = [...counts.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([cluster, count]) => `
-      <div class="legend-item">
+      <button class="legend-item${Number(activeCluster) === Number(cluster) ? " active" : ""}" type="button" data-cluster="${cluster}">
         <span class="swatch" style="background:${clusterColor(cluster)}"></span>
         <span>${clusterLabel(cluster)} · ${count} decks</span>
-      </div>
+      </button>
     `)
     .join("");
-}
-
-function drawCards(result) {
-  if (!result.card_differences.length) {
-    cardsEl.innerHTML = `<div class="cluster-detail">No comparison cluster.</div>`;
-    return;
-  }
-  ensureSelectedArchetypeCluster(result);
-  cardsEl.innerHTML = result.card_differences
-    .map((cluster) => {
-      const higher = cluster.higher.slice(0, 5).map((item) => `${escapeHtml(item.card)} (${item.diff.toFixed(1)})`).join(", ");
-      const lower = cluster.lower.slice(0, 3).map((item) => `${escapeHtml(item.card)} (${item.diff.toFixed(1)})`).join(", ");
-      const active = Number(cluster.cluster) === Number(selectedArchetypeCluster) ? " active" : "";
-      return `
-        <button class="cluster-detail cluster-card${active}" type="button" data-cluster="${cluster.cluster}" style="--cluster-color:${clusterColor(cluster.cluster)}">
-          <strong>${clusterLabel(cluster.cluster)}</strong><br>
-          More: ${higher || "n/a"}<br>
-          Less: ${lower || "n/a"}
-        </button>
-      `;
-    })
-    .join("");
-
-  cardsEl.querySelectorAll("button[data-cluster]").forEach((button) => {
-    button.addEventListener("click", () => {
-      selectedArchetypeCluster = Number(button.dataset.cluster);
-      drawCards(result);
-      drawClusterArchetypes(result);
-    });
+  legendEl.querySelectorAll("button[data-cluster]").forEach((button) => {
+    button.addEventListener("click", () => selectCluster(button.dataset.cluster));
   });
-}
-
-function pctText(value) {
-  return `${Math.round(Number(value || 0) * 100)}%`;
 }
 
 function distEntries(card) {
@@ -542,28 +622,50 @@ function archetypeSection(section, n, color, cluster) {
   `;
 }
 
-function drawClusterArchetypes(result) {
-  const clusters = result.cluster_archetypes || [];
-  if (!clusters.length) {
-    archetypeViewerEl.innerHTML = `<div class="cluster-detail">No cluster viewer data.</div>`;
+function clusterDifferences(result, clusterId) {
+  const cluster = (result.card_differences || []).find((item) => Number(item.cluster) === Number(clusterId));
+  if (!cluster) return `<div class="cluster-detail">No comparison cluster.</div>`;
+  const higher = cluster.higher.slice(0, 8).map((item) => `${escapeHtml(item.card)} (${item.diff.toFixed(1)})`).join(", ");
+  const lower = cluster.lower.slice(0, 5).map((item) => `${escapeHtml(item.card)} (${item.diff.toFixed(1)})`).join(", ");
+  return `
+    <section class="inspector-section">
+      <h3>Cards</h3>
+      <div class="cluster-detail">
+        More: ${higher || "n/a"}<br>
+        Less: ${lower || "n/a"}
+      </div>
+    </section>
+  `;
+}
+
+function drawClusterInspector(result) {
+  const selected = ensureSelectedCluster(result);
+  if (!selected) {
+    inspectorEl.innerHTML = `<div class="inspector-empty">No cluster viewer data.</div>`;
     return;
   }
 
-  const selected = ensureSelectedArchetypeCluster(result);
   const color = clusterColor(selected.cluster);
   const sections = selected.sections.length
     ? selected.sections.map((section) => archetypeSection(section, selected.n, color, selected.cluster)).join("")
     : `<div class="cluster-detail">No card-level data for this cluster.</div>`;
 
-  archetypeViewerEl.innerHTML = `
-    <div class="archetype-heading">
-      <strong>${escapeHtml(clusterLabel(selected.cluster))}</strong>
-      <span>${escapeHtml(selected.n)} decks</span>
+  inspectorEl.innerHTML = `
+    <div class="inspector-heading">
+      <div>
+        <h2>${escapeHtml(clusterLabel(selected.cluster))}</h2>
+        <p>${escapeHtml(selected.n)} decks</p>
+      </div>
+      <span class="inspector-swatch" style="background:${color}"></span>
     </div>
-    <div class="archetype-sections">${sections}</div>
+    ${clusterDifferences(result, selected.cluster)}
+    <section class="inspector-section">
+      <h3>Consensus</h3>
+      <div class="archetype-sections">${sections}</div>
+    </section>
   `;
 
-  archetypeViewerEl.querySelectorAll("button[data-section]").forEach((button) => {
+  inspectorEl.querySelectorAll("button[data-section]").forEach((button) => {
     button.addEventListener("click", () => {
       const sectionKey = button.dataset.section;
       if (expandedArchetypeSections.has(sectionKey)) {
@@ -571,9 +673,71 @@ function drawClusterArchetypes(result) {
       } else {
         expandedArchetypeSections.add(sectionKey);
       }
-      drawClusterArchetypes(result);
+      drawInspector(result);
     });
   });
+}
+
+function decklistSection(section) {
+  const rows = section.cards
+    .map((card) => `
+      <div class="decklist-row">
+        <span class="decklist-count">${escapeHtml(card.copies)}</span>
+        <span>${escapeHtml(card.name)}</span>
+      </div>
+    `)
+    .join("");
+  return `
+    <section class="decklist-section">
+      <h3>${escapeHtml(section.label)}</h3>
+      ${rows}
+    </section>
+  `;
+}
+
+function drawDeckInspector(result) {
+  const point = result.points.find((candidate) => String(candidate.deck_id) === String(selectedInspector?.deckId));
+  if (!point) {
+    drawClusterInspector(result);
+    return;
+  }
+
+  const decklist = result.decklists?.[String(point.deck_id)] || [];
+  const deckUrl = point.deck_url || `https://www.mtgtop8.com/event?d=${point.deck_id}`;
+  inspectorEl.innerHTML = `
+    <div class="inspector-heading">
+      <div>
+        <h2>${escapeHtml(point.player || "Unknown player")}</h2>
+        <p>${escapeHtml(point.deck_name || "Deck")}</p>
+      </div>
+      <span class="inspector-swatch" style="background:${clusterColor(point.cluster)}"></span>
+    </div>
+    ${manaPips(point.colors)}
+    <div class="deck-meta-grid">
+      <span>${escapeHtml(clusterLabel(point.cluster))}</span>
+      <span>${escapeHtml(point.rank || "No rank")}</span>
+      <span>${escapeHtml(point.date || "No date")}</span>
+      <span>${escapeHtml(starSummary(point))}</span>
+    </div>
+    <div class="deck-event">${escapeHtml(point.event || "")}</div>
+    <a class="external-link" href="${escapeHtml(deckUrl)}" target="_blank" rel="noopener">Open MTGTop8</a>
+    <section class="inspector-section">
+      <h3>Decklist</h3>
+      <div class="decklist">${decklist.length ? decklist.map(decklistSection).join("") : `<div class="cluster-detail">No decklist rows.</div>`}</div>
+    </section>
+  `;
+}
+
+function drawInspector(result) {
+  if (!result) {
+    inspectorEl.innerHTML = `<div class="inspector-empty">Run an analysis, then select a cluster or deck.</div>`;
+    return;
+  }
+  if (selectedInspector?.type === "deck") {
+    drawDeckInspector(result);
+  } else {
+    drawClusterInspector(result);
+  }
 }
 
 async function analyze() {

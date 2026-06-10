@@ -16,134 +16,138 @@
           </div>
         </div>
 
-        <details class="nerd-stuff basic-settings" open>
-          <summary>Basic Settings</summary>
-          <section class="search-builder" aria-label="MTGTop8 search">
-            <div class="search-grid">
+        <div class="controls-scroll">
+          <details class="nerd-stuff basic-settings" open>
+            <summary>Basic Settings</summary>
+            <section class="search-builder" aria-label="MTGTop8 search">
+              <div class="search-grid">
+                <label>
+                  <span>Event</span>
+                  <input id="searchEvent" type="text" />
+                </label>
+                <label>
+                  <span>Player</span>
+                  <input id="searchPlayer" type="text" />
+                </label>
+                <label>
+                  <span>Deck</span>
+                  <input id="searchDeck" type="text" />
+                </label>
+                <label>
+                  <span>Format</span>
+                  <select id="searchFormat">
+                    <option value="">All</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Archetype</span>
+                  <select id="searchArchetype">
+                    <option value="">All</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Scope</span>
+                  <select id="scope">
+                    <option value="maindeck">Maindeck</option>
+                    <option value="full75">Full 75</option>
+                    <option value="sideboard">Sideboard</option>
+                  </select>
+                </label>
+              </div>
+
+              <div id="levelChecks" class="check-grid"></div>
+
               <label>
-                <span>Event</span>
-                <input id="searchEvent" type="text" />
+                <span>Cards</span>
+                <textarea id="searchCards" class="short" spellcheck="false" placeholder="Writhing Chrysalis"></textarea>
               </label>
+
+              <div class="check-grid">
+                <label class="check-row">
+                  <input id="searchMainDeck" type="checkbox" checked />
+                  <span>Main deck</span>
+                </label>
+                <label class="check-row">
+                  <input id="searchSideboard" type="checkbox" />
+                  <span>Sideboard</span>
+                </label>
+              </div>
+
+              <div class="search-grid">
+                <label>
+                  <span>From</span>
+                  <input id="searchDateStart" type="date" />
+                </label>
+                <label>
+                  <span>To</span>
+                  <input id="searchDateEnd" type="date" />
+                </label>
+              </div>
+            </section>
+          </details>
+
+          <details class="nerd-stuff card-equivalency">
+            <summary>Card Equivalency</summary>
+            <div class="equivalency-body">
               <label>
-                <span>Player</span>
-                <input id="searchPlayer" type="text" />
+                <span>Classes</span>
+                <textarea id="cardAliases" class="short" spellcheck="false" placeholder="Label: Equivalent Card, Equivalent Card"></textarea>
               </label>
+            </div>
+          </details>
+
+          <details class="nerd-stuff">
+            <summary>Nerd Stuff</summary>
+            <div class="grid-controls">
               <label>
-                <span>Deck</span>
-                <input id="searchDeck" type="text" />
-              </label>
-              <label>
-                <span>Format</span>
-                <select id="searchFormat">
-                  <option value="">All</option>
+                <span>Projection</span>
+                <select id="projection">
+                  <option value="umap_braycurtis">UMAP</option>
+                  <option value="pcoa_braycurtis">Bray-Curtis PCoA</option>
+                  <option value="pcoa_cosine">Cosine PCoA</option>
+                  <option value="pca">PCA Counts</option>
                 </select>
               </label>
               <label>
-                <span>Archetype</span>
-                <select id="searchArchetype">
-                  <option value="">All</option>
+                <span>Cluster Space</span>
+                <select id="clusterSpace">
+                  <option value="plot">Plot Space</option>
+                  <option value="deck">Deck Space</option>
                 </select>
               </label>
               <label>
-                <span>Scope</span>
-                <select id="scope">
-                  <option value="maindeck">Maindeck</option>
-                  <option value="full75">Full 75</option>
-                  <option value="sideboard">Sideboard</option>
+                <span>Clustering</span>
+                <select id="clusterMethod">
+                  <option value="auto">Auto Hierarchical</option>
+                  <option value="hdbscan">HDBSCAN Density</option>
+                  <option value="fixed">Fixed K</option>
                 </select>
               </label>
-            </div>
-
-            <div id="levelChecks" class="check-grid"></div>
-
-            <label>
-              <span>Cards</span>
-              <textarea id="searchCards" class="short" spellcheck="false" placeholder="Writhing Chrysalis"></textarea>
-            </label>
-
-            <div class="check-grid">
-              <label class="check-row">
-                <input id="searchMainDeck" type="checkbox" checked />
-                <span>Main deck</span>
+              <label id="outlierModeControl">
+                <span>Outliers</span>
+                <select id="outlierMode">
+                  <option value="auto">Auto</option>
+                  <option value="noise">Mark As Noise</option>
+                  <option value="keep">Keep As Clusters</option>
+                </select>
               </label>
-              <label class="check-row">
-                <input id="searchSideboard" type="checkbox" />
-                <span>Sideboard</span>
+              <label id="clusterKControl">
+                <span>Clusters</span>
+                <input id="clusterK" type="number" min="1" max="8" value="2" />
               </label>
             </div>
 
-            <div class="search-grid">
-              <label>
-                <span>From</span>
-                <input id="searchDateStart" type="date" />
-              </label>
-              <label>
-                <span>To</span>
-                <input id="searchDateEnd" type="date" />
-              </label>
-            </div>
-          </section>
-        </details>
+            <label class="check-row">
+              <input id="scaleClusters" type="checkbox" checked />
+              <span>Standardize Euclidean clustering inputs</span>
+            </label>
+          </details>
+        </div>
 
-        <details class="nerd-stuff card-equivalency">
-          <summary>Card Equivalency</summary>
-          <div class="equivalency-body">
-            <label>
-              <span>Classes</span>
-              <textarea id="cardAliases" class="short" spellcheck="false" placeholder="Label: Equivalent Card, Equivalent Card"></textarea>
-            </label>
-          </div>
-        </details>
-
-        <details class="nerd-stuff">
-          <summary>Nerd Stuff</summary>
-          <div class="grid-controls">
-            <label>
-              <span>Projection</span>
-              <select id="projection">
-                <option value="umap_braycurtis">UMAP</option>
-                <option value="pcoa_braycurtis">Bray-Curtis PCoA</option>
-                <option value="pcoa_cosine">Cosine PCoA</option>
-                <option value="pca">PCA Counts</option>
-              </select>
-            </label>
-            <label>
-              <span>Cluster Space</span>
-              <select id="clusterSpace">
-                <option value="plot">Plot Space</option>
-                <option value="deck">Deck Space</option>
-              </select>
-            </label>
-            <label>
-              <span>Clustering</span>
-              <select id="clusterMethod">
-                <option value="auto">Auto Hierarchical</option>
-                <option value="hdbscan">HDBSCAN Density</option>
-                <option value="fixed">Fixed K</option>
-              </select>
-            </label>
-            <label id="outlierModeControl">
-              <span>Outliers</span>
-              <select id="outlierMode">
-                <option value="auto">Auto</option>
-                <option value="noise">Mark As Noise</option>
-                <option value="keep">Keep As Clusters</option>
-              </select>
-            </label>
-            <label id="clusterKControl">
-              <span>Clusters</span>
-              <input id="clusterK" type="number" min="1" max="8" value="2" />
-            </label>
-          </div>
-
-          <label class="check-row">
-            <input id="scaleClusters" type="checkbox" checked />
-            <span>Standardize Euclidean clustering inputs</span>
-          </label>
-        </details>
-
-        <button id="analyzeButton" type="button">Analyze</button>
-        <div id="status" class="status">Ready</div>
+        <div class="controls-actions">
+          <button id="analyzeButton" type="button">Analyze</button>
+          <div id="status" class="status">Ready</div>
+        </div>
       </section>
 
       <section class="workspace">
@@ -159,15 +163,13 @@
           <div id="legend" class="plot-legend" aria-label="Cluster legend"></div>
           <div id="tooltip" class="tooltip" hidden></div>
         </div>
-        <div class="lower-grid">
-          <section class="panel" aria-label="Cards">
-            <div id="cards"></div>
-          </section>
-          <section class="panel archetype-panel" aria-label="Cluster Viewer">
-            <div id="archetypeViewer"></div>
-          </section>
-        </div>
       </section>
+
+      <aside class="inspector-panel" aria-label="Selection inspector">
+        <div id="inspector" class="inspector-content">
+          <div class="inspector-empty">Run an analysis, then select a cluster or deck.</div>
+        </div>
+      </aside>
     </main>
     <script src="/app.js"></script>
   </body>

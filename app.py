@@ -771,6 +771,52 @@ def build_cluster_archetypes(
     return cluster_archetypes
 
 
+def build_decklists(records: list[dict], deck_ids: list[str] | pd.Index) -> dict[str, list[dict]]:
+    wanted = {str(deck_id) for deck_id in deck_ids}
+    section_order = {section: index for index, (section, _) in enumerate(CLUSTER_ARCHETYPE_SECTIONS)}
+    cards_by_deck: dict[str, dict[tuple[str, str], dict]] = {}
+
+    for index, record in enumerate(records):
+        deck_id = str(record.get("deck_id") or "")
+        if deck_id not in wanted:
+            continue
+        section = str(record.get("section") or "")
+        card = str(record.get("card") or "")
+        copies = int(record.get("copies") or 0)
+        if not section or not card or copies <= 0:
+            continue
+
+        key = (section, card)
+        deck_cards = cards_by_deck.setdefault(deck_id, {})
+        if key not in deck_cards:
+            deck_cards[key] = {
+                "section": section,
+                "name": card,
+                "copies": 0,
+                "first_seen": index,
+            }
+        deck_cards[key]["copies"] += copies
+
+    decklists: dict[str, list[dict]] = {}
+    for deck_id in wanted:
+        cards = sorted(
+            cards_by_deck.get(deck_id, {}).values(),
+            key=lambda card: (section_order.get(str(card["section"]), 99), int(card["first_seen"])),
+        )
+        sections = []
+        for section, label in CLUSTER_ARCHETYPE_SECTIONS:
+            section_cards = [
+                {"name": str(card["name"]), "copies": int(card["copies"])}
+                for card in cards
+                if card["section"] == section
+            ]
+            if section_cards:
+                sections.append({"key": section.lower().replace(" ", "_"), "label": label, "cards": section_cards})
+        decklists[deck_id] = sections
+
+    return decklists
+
+
 def batched(values: list[str], size: int) -> list[list[str]]:
     return [values[i : i + size] for i in range(0, len(values), size)]
 
@@ -1460,6 +1506,7 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
         )
 
     cluster_archetypes = build_cluster_archetypes(records, features.index, labels, alias_map)
+    decklists = build_decklists(records, features.index)
 
     return {
         "points": points,
@@ -1486,6 +1533,7 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
         },
         "card_differences": card_differences,
         "cluster_archetypes": cluster_archetypes,
+        "decklists": decklists,
     }
 
 
