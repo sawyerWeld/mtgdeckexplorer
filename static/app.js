@@ -285,6 +285,55 @@ function paddedHullPoints(points, pad = 13) {
   });
 }
 
+function pointBounds(points) {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
+    centerX: (minX + maxX) / 2,
+    centerY: (minY + maxY) / 2,
+  };
+}
+
+function polygonArea(points) {
+  let area = 0;
+  points.forEach((point, index) => {
+    const next = points[(index + 1) % points.length];
+    area += point.x * next.y - next.x * point.y;
+  });
+  return Math.abs(area) / 2;
+}
+
+function clusterRegionMarkup(cluster, clusterPoints, color, active) {
+  const classes = `cluster-hull${active}`;
+  const attrs = `class="${classes}" data-cluster="${cluster}" fill="${color}" stroke="${color}"`;
+  const bounds = pointBounds(clusterPoints);
+  const hull = paddedHullPoints(clusterPoints, 18);
+  const isTiny = bounds.width < 34 || bounds.height < 34 || polygonArea(hull) < 720;
+
+  if (hull.length >= 3 && !isTiny) {
+    const points = hull.map((point) => `${point.x},${point.y}`).join(" ");
+    return `<polygon ${attrs} points="${points}"/>`;
+  }
+
+  const minSize = 46;
+  const pad = 18;
+  const width = Math.max(bounds.width + pad * 2, minSize);
+  const height = Math.max(bounds.height + pad * 2, minSize);
+  const x = bounds.centerX - width / 2;
+  const y = bounds.centerY - height / 2;
+  return `<rect ${attrs} x="${x}" y="${y}" width="${width}" height="${height}" rx="14"/>`;
+}
+
 function drawPlot(result) {
   const points = result.points;
   const diagnostics = result.diagnostics;
@@ -336,13 +385,9 @@ function drawPlot(result) {
     clusters.get(cluster).push({ x: sx(point.x), y: sy(point.y) });
   });
   [...clusters.entries()].forEach(([cluster, clusterPoints]) => {
-    const hull = paddedHullPoints(clusterPoints);
-    if (hull.length < 3) return;
     const color = clusterColor(cluster);
     const active = Number(cluster) === Number(selectedCluster) ? " selected" : "";
-    svg += `<polygon class="cluster-hull${active}" data-cluster="${cluster}" points="${hull
-      .map((point) => `${point.x},${point.y}`)
-      .join(" ")}" fill="${color}" stroke="${color}"/>`;
+    svg += clusterRegionMarkup(cluster, clusterPoints, color, active);
   });
 
   const renderPoint = (point, index) => {
