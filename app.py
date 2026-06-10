@@ -40,7 +40,9 @@ if DEPS_DIR.exists() and str(DEPS_DIR) not in sys.path:
 MTGTOP8 = "https://www.mtgtop8.com"
 SCRYFALL_COLLECTION = "https://api.scryfall.com/cards/collection"
 USER_AGENT = "Mozilla/5.0 mtgtop8-pca-local-tool"
-MTGTOP8_CACHE_TTL = 24 * 60 * 60
+DEFAULT_CACHE_TTL = object()
+MTGTOP8_SEARCH_CACHE_TTL = 7 * 24 * 60 * 60
+MTGTOP8_OTHER_CACHE_TTL = 24 * 60 * 60
 SEARCH_OPTIONS_CACHE_TTL = 24 * 60 * 60
 SCRYFALL_COLOR_CACHE_TTL = 90 * 24 * 60 * 60
 FETCH_CACHE: dict[tuple[str, str], str] = {}
@@ -98,6 +100,30 @@ FALLBACK_LEVELS = [
     {"code": "C", "label": "Competitive", "checked": True},
     {"code": "R", "label": "Regular", "checked": True},
 ]
+
+
+@dataclass
+class FetchStats:
+    memory_hits: int = 0
+    disk_hits: int = 0
+    misses: int = 0
+
+    @property
+    def hits(self) -> int:
+        return self.memory_hits + self.disk_hits
+
+    @property
+    def total(self) -> int:
+        return self.hits + self.misses
+
+    def as_dict(self) -> dict[str, int]:
+        return {
+            "memory_hits": self.memory_hits,
+            "disk_hits": self.disk_hits,
+            "hits": self.hits,
+            "misses": self.misses,
+            "total": self.total,
+        }
 
 
 def disk_cache_key(namespace: str, *parts: object) -> str:
@@ -250,7 +276,29 @@ def rank_is_featured_finish(rank: str | None) -> bool:
     return bool(info["finish_max"] and int(info["finish_max"]) <= 8)
 
 
-def fetch_url(url: str, *, data: list[tuple[str, str]] | None = None) -> str:
+def mtgtop8_cache_ttl(url: str, data: list[tuple[str, str]] | None = None) -> int | None:
+    path = urlparse(url).path
+    if path == "/compare":
+        return None
+    if path == "/search" and data is not None:
+        return MTGTOP8_SEARCH_CACHE_TTL
+    return MTGTOP8_OTHER_CACHE_TTL
+
+
+def deck_id_sort_key(deck_id: str) -> tuple[int, int | str]:
+    try:
+        return (0, int(deck_id))
+    except ValueError:
+        return (1, deck_id)
+
+
+def fetch_url(
+    url: str,
+    *,
+    data: list[tuple[str, str]] | None = None,
+    ttl_seconds: int | None | object = DEFAULT_CACHE_TTL,
+    stats: FetchStats | None = None,
+) -> str:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or parsed.netloc not in {"www.mtgtop8.com", "mtgtop8.com"}:
         raise ValueError("Only mtgtop8.com URLs are supported.")
@@ -263,13 +311,19 @@ def fetch_url(url: str, *, data: list[tuple[str, str]] | None = None) -> str:
         encoded = encoded_text.encode("utf-8")
         headers["Content-Type"] = "application/x-www-form-urlencoded"
 
+    ttl = mtgtop8_cache_ttl(url, data) if ttl_seconds is DEFAULT_CACHE_TTL else ttl_seconds
     cache_key = (url, encoded_text)
     if cache_key in FETCH_CACHE:
+        if stats:
+            stats.memory_hits += 1
         return FETCH_CACHE[cache_key]
     persisted_key = disk_cache_key("mtgtop8-fetch", url, encoded_text)
     persisted = disk_cache_get(persisted_key)
     if persisted is not None:
         FETCH_CACHE[cache_key] = persisted
+        disk_cache_set(persisted_key, persisted, ttl)
+        if stats:
+            stats.disk_hits += 1
         return persisted
 
     request = Request(url, data=encoded, headers=headers)
@@ -277,7 +331,9 @@ def fetch_url(url: str, *, data: list[tuple[str, str]] | None = None) -> str:
         body = response.read()
     text = body.decode("latin1", errors="replace")
     FETCH_CACHE[cache_key] = text
-    disk_cache_set(persisted_key, text, MTGTOP8_CACHE_TTL)
+    disk_cache_set(persisted_key, text, ttl)
+    if stats:
+        stats.misses += 1
     return text
 
 
@@ -392,7 +448,7 @@ def search_options_payload() -> dict:
         except json.JSONDecodeError:
             pass
     try:
-        payload = parse_search_options(fetch_url(f"{MTGTOP8}/search"))
+        payload = parse_search_options(fetch_url(f"{MTGTOP8}/search", ttl_seconds=SEARCH_OPTIONS_CACHE_TTL))
     except Exception:
         payload = {"formats": FALLBACK_FORMATS, "archetypes": {}, "levels": FALLBACK_LEVELS}
     SEARCH_OPTIONS_CACHE["payload"] = payload
@@ -1274,6 +1330,7 @@ def collect_decks_and_cards(
     source_kind: str,
     source_value: str,
     progress: Callable[[str], None] | None = None,
+    fetch_stats: FetchStats | None = None,
 ) -> tuple[list[dict], list[dict], dict]:
     if find_compare_table(source) is not None:
         decks, records = parse_compare_html(source, source_value)
@@ -1301,7 +1358,7 @@ def collect_decks_and_cards(
             if progress:
                 progress(f"Fetching search page {page}/{page_count}...")
             data = extract_search_form(source, page)
-            search_pages.append(fetch_url(post_url, data=data))
+            search_pages.append(fetch_url(post_url, data=data, stats=fetch_stats))
 
     search_decks_by_id: dict[str, dict] = {}
     for page_html in search_pages:
@@ -1314,12 +1371,13 @@ def collect_decks_and_cards(
 
     compare_decks: dict[str, dict] = {}
     records: list[dict] = []
-    compare_batches = batched(deck_ids, 25)
+    compare_deck_ids = sorted(deck_ids, key=deck_id_sort_key)
+    compare_batches = batched(compare_deck_ids, 25)
     for i, batch in enumerate(compare_batches, start=1):
         if progress:
             progress(f"Fetching deck comparison {i}/{len(compare_batches)}...")
         compare_url = f"{MTGTOP8}/compare?l=_" + "_".join(batch) + "_"
-        compare_html = fetch_url(compare_url)
+        compare_html = fetch_url(compare_url, stats=fetch_stats)
         batch_decks, batch_records = parse_compare_html(compare_html, compare_url)
         for deck in batch_decks:
             compare_decks[deck["deck_id"]] = deck
@@ -1329,7 +1387,7 @@ def collect_decks_and_cards(
     for deck_id in deck_ids:
         decks.append(merge_deck_meta(compare_decks.get(deck_id, {}), search_decks_by_id[deck_id]))
 
-    return decks, records, {"input_type": "search", "reported_count": total_count, "pages": page_count}
+    return decks, records, {"input_type": "search", "reported_count": total_count, "pages": page_count, "compare_batches": len(compare_batches)}
 
 
 def criteria_search_intent(criteria: dict | None) -> tuple[bool, bool]:
@@ -1370,6 +1428,7 @@ def resolve_outlier_mode(requested_mode: str, search_criteria: dict | None, sour
 def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dict:
     source_value = (payload.get("source") or "").strip()
     search_criteria = payload.get("search") if isinstance(payload.get("search"), dict) else None
+    fetch_stats = FetchStats()
 
     if not source_value and not search_criteria:
         raise ValueError("Use the MTGTop8 search builder, or paste a search URL, compare URL, POST body, or saved HTML.")
@@ -1378,14 +1437,14 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
         if progress:
             progress("Fetching search page 1...")
         form_data = build_search_form(search_criteria)
-        source = fetch_url(f"{MTGTOP8}/search", data=form_data)
+        source = fetch_url(f"{MTGTOP8}/search", data=form_data, stats=fetch_stats)
         source_kind = "search_builder"
         source_value = urlencode(form_data, doseq=True)
     elif curl_body := extract_post_body_from_curl(source_value):
         if progress:
             progress("Fetching search page 1...")
         form_data = parse_qsl(curl_body, keep_blank_values=True)
-        source = fetch_url(f"{MTGTOP8}/search", data=form_data)
+        source = fetch_url(f"{MTGTOP8}/search", data=form_data, stats=fetch_stats)
         source_kind = "curl_post_body"
     elif looks_like_html(source_value):
         source = source_value
@@ -1394,15 +1453,15 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
         if progress:
             progress("Fetching search page 1...")
         form_data = parse_qsl(source_value, keep_blank_values=True)
-        source = fetch_url(f"{MTGTOP8}/search", data=form_data)
+        source = fetch_url(f"{MTGTOP8}/search", data=form_data, stats=fetch_stats)
         source_kind = "post_body"
     else:
         if progress:
             progress("Fetching MTGTop8 page...")
-        source = fetch_url(source_value)
+        source = fetch_url(source_value, stats=fetch_stats)
         source_kind = "url"
 
-    decks, records, input_meta = collect_decks_and_cards(source, source_kind, source_value, progress)
+    decks, records, input_meta = collect_decks_and_cards(source, source_kind, source_value, progress, fetch_stats)
     if not records:
         raise ValueError("No card rows found for the selected decks.")
 
@@ -1530,6 +1589,7 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
             "starred_decks": starred_decks,
             "big_star_decks": big_star_decks,
             "featured_decks": featured_decks,
+            "cache": fetch_stats.as_dict(),
         },
         "card_differences": card_differences,
         "cluster_archetypes": cluster_archetypes,

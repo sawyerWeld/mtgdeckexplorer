@@ -486,12 +486,15 @@ function renderResult(result) {
   expandedArchetypeSections = new Set();
   selectedInspector = null;
   const d = result.diagnostics;
+  const cache = d.cache || {};
+  const cacheValue = Number(cache.total || 0) ? `${cache.hits}/${cache.total}` : "n/a";
   const xLabel = d.axis_labels?.[0] || "Axis 1";
   const yLabel = d.axis_labels?.[1] || "Axis 2";
   metricsEl.innerHTML = [
     metric("Decks", d.deck_count),
     metric("Cards", d.card_columns),
     metric("Features", d.feature_columns),
+    metric("Cache", cacheValue),
     metric(xLabel, varianceMetric(d.explained_variance[0])),
     metric(yLabel, varianceMetric(d.explained_variance[1])),
     metric("Silhouette", d.silhouette == null ? "n/a" : d.silhouette.toFixed(3)),
@@ -767,7 +770,10 @@ async function analyze() {
 
     const result = await readAnalysisStream(response);
     renderResult(result);
-    setStatus("Done");
+    const cache = result.diagnostics?.cache;
+    const cacheStatus =
+      cache && Number(cache.total || 0) ? `Done · ${cache.hits} cached, ${cache.misses} fetched` : "Done";
+    setStatus(cacheStatus);
   } catch (error) {
     setStatus(error.message, "error");
   } finally {
