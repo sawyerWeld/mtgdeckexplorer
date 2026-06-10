@@ -1,8 +1,3 @@
-const sourceEl = document.querySelector("#source");
-const builderModeButton = document.querySelector("#builderModeButton");
-const rawModeButton = document.querySelector("#rawModeButton");
-const builderPanel = document.querySelector("#builderPanel");
-const rawPanel = document.querySelector("#rawPanel");
 const searchEventEl = document.querySelector("#searchEvent");
 const searchDeckEl = document.querySelector("#searchDeck");
 const searchPlayerEl = document.querySelector("#searchPlayer");
@@ -25,7 +20,6 @@ const clusterKControlEl = document.querySelector("#clusterKControl");
 const clusterKEl = document.querySelector("#clusterK");
 const scaleClustersEl = document.querySelector("#scaleClusters");
 const analyzeButton = document.querySelector("#analyzeButton");
-const demoButton = document.querySelector("#demoButton");
 const statusEl = document.querySelector("#status");
 const plotEl = document.querySelector("#plot");
 const tooltipEl = document.querySelector("#tooltip");
@@ -48,7 +42,6 @@ const colors = [
 
 let currentResult = null;
 let selectedArchetypeCluster = null;
-let activeInputMode = "builder";
 let searchOptions = {
   formats: [{ value: "", label: "All" }],
   archetypes: {},
@@ -78,15 +71,6 @@ function escapeHtml(value) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function setInputMode(mode) {
-  activeInputMode = mode;
-  const useBuilder = mode === "builder";
-  builderPanel.hidden = !useBuilder;
-  rawPanel.hidden = useBuilder;
-  builderModeButton.classList.toggle("active", useBuilder);
-  rawModeButton.classList.toggle("active", !useBuilder);
 }
 
 function optionMarkup(option) {
@@ -580,8 +564,8 @@ async function analyze() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        source: activeInputMode === "raw" ? sourceEl.value : "",
-        search: activeInputMode === "builder" ? collectSearchCriteria() : null,
+        source: "",
+        search: collectSearchCriteria(),
         aliases: cardAliasesEl.value,
         projection: projectionEl.value,
         scope: scopeEl.value,
@@ -640,28 +624,12 @@ async function readAnalysisStream(response) {
   return result;
 }
 
-builderModeButton.addEventListener("click", () => setInputMode("builder"));
-rawModeButton.addEventListener("click", () => setInputMode("raw"));
 searchFormatEl.addEventListener("change", updateArchetypeOptions);
 clusterMethodEl.addEventListener("change", updateClusterControls);
 analyzeButton.addEventListener("click", analyze);
 window.addEventListener("resize", () => {
   if (currentResult) drawPlot(currentResult);
 });
-demoButton.addEventListener("click", async () => {
-  setStatus("Loading demo...");
-  try {
-    const response = await fetch("/api/demo-source");
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || "Demo unavailable.");
-    setInputMode("raw");
-    sourceEl.value = body.source;
-    setStatus("Demo loaded");
-  } catch (error) {
-    setStatus(error.message, "error");
-  }
-});
 updateClusterControls();
-setInputMode("builder");
 applySearchDefaults();
 loadSearchOptions();

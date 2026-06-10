@@ -14,78 +14,76 @@
             <h1>MTGTop8 PCA</h1>
             <p>Decklist similarity from search results</p>
           </div>
-          <button id="demoButton" type="button" title="Load the Guac Pizza saved search">Demo</button>
         </div>
 
-        <div class="source-tabs" role="tablist" aria-label="Input mode">
-          <button id="builderModeButton" class="mode-button active" type="button">Search</button>
-          <button id="rawModeButton" class="mode-button" type="button">Raw</button>
-        </div>
+        <details class="nerd-stuff basic-settings" open>
+          <summary>Basic Settings</summary>
+          <section class="search-builder" aria-label="MTGTop8 search">
+            <div class="search-grid">
+              <label>
+                <span>Event</span>
+                <input id="searchEvent" type="text" />
+              </label>
+              <label>
+                <span>Player</span>
+                <input id="searchPlayer" type="text" />
+              </label>
+              <label>
+                <span>Deck</span>
+                <input id="searchDeck" type="text" />
+              </label>
+              <label>
+                <span>Format</span>
+                <select id="searchFormat">
+                  <option value="">All</option>
+                </select>
+              </label>
+              <label>
+                <span>Archetype</span>
+                <select id="searchArchetype">
+                  <option value="">All</option>
+                </select>
+              </label>
+              <label>
+                <span>Scope</span>
+                <select id="scope">
+                  <option value="maindeck">Maindeck</option>
+                  <option value="full75">Full 75</option>
+                  <option value="sideboard">Sideboard</option>
+                </select>
+              </label>
+            </div>
 
-        <section id="builderPanel" class="search-builder" aria-label="MTGTop8 search">
-          <div class="search-grid">
-            <label>
-              <span>Event</span>
-              <input id="searchEvent" type="text" />
-            </label>
-            <label>
-              <span>Player</span>
-              <input id="searchPlayer" type="text" />
-            </label>
-            <label>
-              <span>Deck</span>
-              <input id="searchDeck" type="text" />
-            </label>
-            <label>
-              <span>Format</span>
-              <select id="searchFormat">
-                <option value="">All</option>
-              </select>
-            </label>
-            <label class="full-row">
-              <span>Archetype</span>
-              <select id="searchArchetype">
-                <option value="">All</option>
-              </select>
-            </label>
-          </div>
+            <div id="levelChecks" class="check-grid"></div>
 
-          <div id="levelChecks" class="check-grid"></div>
-
-          <label>
-            <span>Cards</span>
-            <textarea id="searchCards" class="short" spellcheck="false" placeholder="Writhing Chrysalis"></textarea>
-          </label>
-
-          <div class="check-grid">
-            <label class="check-row">
-              <input id="searchMainDeck" type="checkbox" checked />
-              <span>Main deck</span>
-            </label>
-            <label class="check-row">
-              <input id="searchSideboard" type="checkbox" />
-              <span>Sideboard</span>
-            </label>
-          </div>
-
-          <div class="search-grid">
             <label>
-              <span>From</span>
-              <input id="searchDateStart" type="date" />
+              <span>Cards</span>
+              <textarea id="searchCards" class="short" spellcheck="false" placeholder="Writhing Chrysalis"></textarea>
             </label>
-            <label>
-              <span>To</span>
-              <input id="searchDateEnd" type="date" />
-            </label>
-          </div>
-        </section>
 
-        <section id="rawPanel" class="raw-panel" aria-label="Raw MTGTop8 input" hidden>
-          <label>
-            <span>Search URL, POST Body, Or HTML</span>
-            <textarea id="source" spellcheck="false" placeholder="current_page=&event_titre=&deck_titre=&player=&format=PAU&..."></textarea>
-          </label>
-        </section>
+            <div class="check-grid">
+              <label class="check-row">
+                <input id="searchMainDeck" type="checkbox" checked />
+                <span>Main deck</span>
+              </label>
+              <label class="check-row">
+                <input id="searchSideboard" type="checkbox" />
+                <span>Sideboard</span>
+              </label>
+            </div>
+
+            <div class="search-grid">
+              <label>
+                <span>From</span>
+                <input id="searchDateStart" type="date" />
+              </label>
+              <label>
+                <span>To</span>
+                <input id="searchDateEnd" type="date" />
+              </label>
+            </div>
+          </section>
+        </details>
 
         <details class="nerd-stuff card-equivalency">
           <summary>Card Equivalency</summary>
@@ -107,14 +105,6 @@
                 <option value="pcoa_cosine">Cosine PCoA</option>
                 <option value="pca">PCA Counts</option>
                 <option value="umap_braycurtis">UMAP (Experimental)</option>
-              </select>
-            </label>
-            <label>
-              <span>Scope</span>
-              <select id="scope">
-                <option value="maindeck">Maindeck</option>
-                <option value="full75">Full 75</option>
-                <option value="sideboard">Sideboard</option>
               </select>
             </label>
             <label>
@@ -160,7 +150,7 @@
         <div class="plot-header">
           <div>
             <h2 id="plotTitle">Similarity Plot</h2>
-            <p id="summary">Paste a search result, then run analysis.</p>
+            <p id="summary">Choose search settings, then run analysis.</p>
           </div>
           <div id="metrics" class="metrics"></div>
         </div>

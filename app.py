@@ -1496,13 +1496,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
-        if path == "/api/demo-source":
-            demo_path = Path("/Users/sayer/Downloads/Decks Search @ mtgtop8.com 3.html")
-            if not demo_path.exists():
-                self.send_json(404, {"error": "Demo search HTML was not found in Downloads."})
-                return
-            self.send_json(200, {"source": demo_path.read_text(encoding="latin1", errors="replace")})
-            return
         if path == "/api/search-options":
             self.send_json(200, search_options_payload())
             return

@@ -207,6 +207,7 @@ select {
 
 .nerd-stuff .grid-controls,
 .nerd-stuff .check-row,
+.nerd-stuff .search-builder,
 .nerd-stuff .equivalency-body {
   margin-left: 10px;
   margin-right: 10px;
@@ -214,6 +215,7 @@ select {
 
 .nerd-stuff[open] .grid-controls,
 .nerd-stuff[open] .check-row,
+.nerd-stuff[open] .search-builder,
 .nerd-stuff[open] .equivalency-body {
   margin-top: 10px;
 }
@@ -243,35 +245,11 @@ button:hover {
   background: #303949;
 }
 
-#demoButton {
-  background: #e8edf5;
-  color: #263244;
-  padding: 8px 11px;
-}
-
 #analyzeButton {
   width: 100%;
 }
 
-.source-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.mode-button {
-  background: #e8edf5;
-  color: #263244;
-  padding: 8px 10px;
-}
-
-.mode-button.active {
-  background: var(--ink);
-  color: white;
-}
-
-.search-builder,
-.raw-panel {
+.search-builder {
   display: grid;
   gap: 10px;
 }
@@ -280,10 +258,6 @@ button:hover {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 9px;
-}
-
-.full-row {
-  grid-column: 1 / -1;
 }
 
 .check-grid {
