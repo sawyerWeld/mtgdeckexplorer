@@ -270,7 +270,7 @@ function resetPlotView() {
 
 function startPlotPan(event) {
   if (!currentResult || event.button !== 0) return;
-  if (event.target.closest?.(".point")) return;
+  if (!event.target.classList?.contains("plot-background")) return;
   ensurePlotView(currentResult.points);
   plotDrag = {
     pointerId: event.pointerId,
@@ -496,7 +496,7 @@ function drawPlot(result) {
   plotEl.setAttribute("width", "100%");
   plotEl.setAttribute("height", "100%");
   let svg = "";
-  svg += `<rect x="0" y="0" width="${width}" height="${height}" fill="#fff"/>`;
+  svg += `<rect class="plot-background" x="0" y="0" width="${width}" height="${height}" fill="#fff"/>`;
 
   for (const tick of xTicks) {
     const x = sx(tick);
