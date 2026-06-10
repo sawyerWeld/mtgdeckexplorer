@@ -453,8 +453,8 @@ function polygonArea(points) {
   return Math.abs(area) / 2;
 }
 
-function clusterRegionMarkup(cluster, clusterPoints, color, active) {
-  const classes = `cluster-hull${active}`;
+function clusterRegionMarkup(cluster, clusterPoints, color, active, ghost = false) {
+  const classes = `cluster-hull${active}${ghost ? " ghost" : ""}`;
   const attrs = `class="${classes}" data-cluster="${cluster}" fill="${color}" stroke="${color}"`;
   const bounds = pointBounds(clusterPoints);
   const hull = paddedHullPoints(clusterPoints, 18);
@@ -527,10 +527,10 @@ function drawPlot(result) {
     clusters.get(cluster).push({ x: sx(point.x), y: sy(point.y) });
   });
   [...clusters.entries()].forEach(([cluster, clusterPoints]) => {
-    if (densityMode !== "normal" && Number(cluster) !== Number(selectedCluster)) return;
     const color = clusterColor(cluster);
     const active = Number(cluster) === Number(selectedCluster) ? " selected" : "";
-    svg += clusterRegionMarkup(cluster, clusterPoints, color, active);
+    const ghost = densityMode !== "normal" && Number(cluster) !== Number(selectedCluster);
+    svg += clusterRegionMarkup(cluster, clusterPoints, color, active, ghost);
   });
 
   const renderPoint = (point, index) => {

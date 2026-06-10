@@ -729,6 +729,16 @@ button:hover {
   stroke-width: 1.5;
 }
 
+.cluster-hull.ghost {
+  fill-opacity: 0;
+  stroke-opacity: 0;
+}
+
+.cluster-hull.ghost:hover {
+  fill-opacity: 0.08;
+  stroke-opacity: 0.42;
+}
+
 .cluster-hull:hover,
 .cluster-hull.selected {
   fill-opacity: 0.13;
