@@ -898,11 +898,13 @@ def sorted_colors(colors: list[str] | set[str]) -> list[str]:
 
 
 def colors_from_scryfall_card(card: dict) -> list[str]:
-    colors = card.get("colors")
+    colors = card.get("color_identity")
+    if colors is None:
+        colors = card.get("colors")
     if colors is None and isinstance(card.get("card_faces"), list):
         face_colors: set[str] = set()
         for face in card["card_faces"]:
-            face_colors.update(face.get("colors") or [])
+            face_colors.update(face.get("color_identity") or face.get("colors") or [])
         colors = list(face_colors)
     return sorted_colors(colors or [])
 
@@ -912,7 +914,7 @@ def fetch_scryfall_card_colors(card_names: list[str]) -> dict[str, list[str]]:
     for name in unique_names:
         if name in SCRYFALL_CARD_COLORS:
             continue
-        persisted = disk_cache_get(disk_cache_key("scryfall-card-colors", name.lower()))
+        persisted = disk_cache_get(disk_cache_key("scryfall-card-color-identity", name.lower()))
         if persisted is None:
             continue
         try:
@@ -957,7 +959,7 @@ def fetch_scryfall_card_colors(card_names: list[str]) -> dict[str, list[str]]:
                 colors = []
             SCRYFALL_CARD_COLORS[name] = colors
             disk_cache_set(
-                disk_cache_key("scryfall-card-colors", name.lower()),
+                disk_cache_key("scryfall-card-color-identity", name.lower()),
                 json.dumps(colors),
                 SCRYFALL_COLOR_CACHE_TTL,
             )
