@@ -506,11 +506,12 @@ function renderResult(result) {
     d.cluster_method === "auto-linkage" && d.outlier_mode_requested === "auto"
       ? ` · auto outliers: ${d.outlier_mode === "noise" ? "noise" : "keep"}`
       : "";
+  const autoFallbackNote = d.auto_fallback ? "auto fallback · " : "";
   const clusterNote =
     d.cluster_method === "auto-linkage"
       ? `auto hierarchical · ${d.auto_clusters} clusters${noiseNote}${outlierNote} · min branch ${d.min_branch_size}`
-      : d.cluster_method === "hdbscan"
-      ? `HDBSCAN min ${d.min_cluster_size} · samples ${d.min_samples}`
+    : d.cluster_method === "hdbscan"
+      ? `${autoFallbackNote}HDBSCAN min ${d.min_cluster_size} · samples ${d.min_samples}`
       : d.cluster_space === "deck" && d.distance_metric
       ? `${d.distance_metric} ${d.cluster_method}`
       : `${d.scale_clusters ? "standardized" : "raw"} ${d.cluster_method}`;
@@ -790,11 +791,15 @@ async function readAnalysisStream(response) {
   const decoder = new TextDecoder();
   let buffer = "";
   let result = null;
+  let lastStatus = "Starting analysis...";
 
   const handleLine = (line) => {
     if (!line.trim()) return;
     const message = JSON.parse(line);
-    if (message.status) setStatus(message.status);
+    if (message.status) {
+      lastStatus = message.status;
+      setStatus(message.status);
+    }
     if (message.error) throw new Error(message.error);
     if (message.result) result = message.result;
   };
@@ -810,7 +815,7 @@ async function readAnalysisStream(response) {
 
   buffer += decoder.decode();
   if (buffer) handleLine(buffer);
-  if (!result) throw new Error("Analysis finished without a result.");
+  if (!result) throw new Error(`Analysis connection closed before a result. Last status: ${lastStatus}`);
   return result;
 }
 

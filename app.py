@@ -45,6 +45,8 @@ MTGTOP8_SEARCH_CACHE_TTL = 7 * 24 * 60 * 60
 MTGTOP8_OTHER_CACHE_TTL = 24 * 60 * 60
 SEARCH_OPTIONS_CACHE_TTL = 24 * 60 * 60
 SCRYFALL_COLOR_CACHE_TTL = 90 * 24 * 60 * 60
+PAIRWISE_DECK_LIMIT = 3000
+SILHOUETTE_DECK_LIMIT = 3000
 FETCH_CACHE: dict[tuple[str, str], str] = {}
 SEARCH_OPTIONS_CACHE: dict[str, object] = {}
 SCRYFALL_CARD_COLORS: dict[str, list[str]] = {}
@@ -983,6 +985,7 @@ def merge_deck_meta(compare_meta: dict, search_meta: dict) -> dict:
 
 
 def cosine_distance_matrix(values: np.ndarray) -> np.ndarray:
+    ensure_pairwise_deck_limit(len(values), "Cosine distance")
     norms = np.linalg.norm(values, axis=1)
     denom = np.outer(norms, norms)
     similarity = np.divide(values @ values.T, denom, out=np.zeros_like(denom), where=denom > 0)
@@ -992,6 +995,7 @@ def cosine_distance_matrix(values: np.ndarray) -> np.ndarray:
 
 
 def bray_curtis_distance_matrix(values: np.ndarray) -> np.ndarray:
+    ensure_pairwise_deck_limit(len(values), "Bray-Curtis distance")
     numerator = np.abs(values[:, None, :] - values[None, :, :]).sum(axis=2)
     denominator = (values[:, None, :] + values[None, :, :]).sum(axis=2)
     distances = np.divide(numerator, denominator, out=np.zeros_like(numerator), where=denominator > 0)
@@ -1000,9 +1004,19 @@ def bray_curtis_distance_matrix(values: np.ndarray) -> np.ndarray:
 
 
 def euclidean_distance_matrix(values: np.ndarray) -> np.ndarray:
+    ensure_pairwise_deck_limit(len(values), "Euclidean distance")
     distances = np.sqrt(((values[:, None, :] - values[None, :, :]) ** 2).sum(axis=2))
     np.fill_diagonal(distances, 0)
     return distances
+
+
+def ensure_pairwise_deck_limit(deck_count: int, operation: str) -> None:
+    if deck_count > PAIRWISE_DECK_LIMIT:
+        raise ValueError(
+            f"{operation} needs all deck-by-deck distances for {deck_count:,} decks. "
+            f"That is too large for this local app limit of {PAIRWISE_DECK_LIMIT:,}. "
+            "Use UMAP/PCA with plot-space clustering or narrow the search."
+        )
 
 
 def pcoa(distance_matrix: np.ndarray) -> tuple[np.ndarray, list[float]]:
@@ -1061,26 +1075,25 @@ def projection_for_features(values: np.ndarray, projection: str) -> tuple[np.nda
         except Exception as exc:
             raise ValueError("UMAP is unavailable. Install umap-learn, then restart the app.") from exc
 
-        distances = bray_curtis_distance_matrix(values)
         n_neighbors = max(2, min(15, values.shape[0] - 1))
         reducer = UMAP(
             n_components=2,
             n_neighbors=n_neighbors,
             min_dist=0.1,
-            metric="precomputed",
+            metric="braycurtis",
             init="random",
             n_jobs=1,
             random_state=1,
         )
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="using precomputed metric.*")
             warnings.filterwarnings("ignore", message="n_jobs value .*")
-            coords = reducer.fit_transform(distances)
-        return coords, [None, None], distances, {
+            coords = reducer.fit_transform(values)
+        return coords, [None, None], None, {
             "projection": projection,
             "projection_label": "UMAP",
             "axis_labels": ["UMAP1", "UMAP2"],
             "distance_metric": "bray-curtis",
+            "umap_metric": "braycurtis",
             "umap_neighbors": n_neighbors,
             "umap_min_dist": 0.1,
         }
@@ -1090,6 +1103,8 @@ def projection_for_features(values: np.ndarray, projection: str) -> tuple[np.nda
 
 def silhouette_for_labels(values: np.ndarray, labels: np.ndarray, *, distance_matrix: np.ndarray | None = None) -> float | None:
     labels = np.asarray(labels)
+    if len(labels) > SILHOUETTE_DECK_LIMIT:
+        return None
     if np.any(labels < 0):
         keep = labels >= 0
         labels = labels[keep]
@@ -1231,6 +1246,35 @@ def detect_isolated_noise(distance_matrix: np.ndarray, min_branch_size: int) -> 
     }
 
 
+def hdbscan_labels(
+    values: np.ndarray,
+    *,
+    distance_matrix: np.ndarray | None,
+    scale_clusters: bool,
+) -> tuple[np.ndarray, float | None, dict]:
+    min_cluster_size = max(3, min(10, math.ceil(len(values) * 0.06)))
+    min_samples = 1
+    if distance_matrix is not None:
+        distances = np.array(distance_matrix, copy=True)
+        np.fill_diagonal(distances, 0)
+        labels = HDBSCAN(
+            min_cluster_size=min_cluster_size,
+            min_samples=min_samples,
+            metric="precomputed",
+            copy=True,
+        ).fit_predict(distances)
+        silhouette = silhouette_for_labels(values, labels, distance_matrix=distance_matrix)
+    else:
+        cluster_values = StandardScaler().fit_transform(values) if scale_clusters else values
+        labels = HDBSCAN(
+            min_cluster_size=min_cluster_size,
+            min_samples=min_samples,
+            copy=True,
+        ).fit_predict(cluster_values)
+        silhouette = silhouette_for_labels(cluster_values, labels)
+    return labels, silhouette, {"min_cluster_size": min_cluster_size, "min_samples": min_samples}
+
+
 def cluster_features(
     values: np.ndarray,
     *,
@@ -1241,6 +1285,18 @@ def cluster_features(
     outlier_mode: str,
 ) -> tuple[np.ndarray, float | None, str, dict]:
     if cluster_method == "auto":
+        if distance_matrix is None and len(values) > PAIRWISE_DECK_LIMIT:
+            labels, silhouette, meta = hdbscan_labels(values, distance_matrix=None, scale_clusters=scale_clusters)
+            non_noise_clusters = len({int(label) for label in labels if int(label) >= 0})
+            noise_decks = int(np.sum(labels < 0))
+            return labels, silhouette, "hdbscan", {
+                **meta,
+                "auto_fallback": "hdbscan",
+                "auto_clusters": non_noise_clusters,
+                "noise_decks": noise_decks,
+                "pairwise_deck_limit": PAIRWISE_DECK_LIMIT,
+            }
+
         if distance_matrix is not None:
             cluster_distance_matrix = np.array(distance_matrix, copy=True)
             np.fill_diagonal(cluster_distance_matrix, 0)
@@ -1281,27 +1337,8 @@ def cluster_features(
         return labels, silhouette, "auto-linkage", {"auto_clusters": auto_k, "min_branch_size": min_branch_size, **noise_meta}
 
     if cluster_method == "hdbscan":
-        min_cluster_size = max(3, min(10, math.ceil(len(values) * 0.06)))
-        min_samples = 1
-        if distance_matrix is not None:
-            distances = np.array(distance_matrix, copy=True)
-            np.fill_diagonal(distances, 0)
-            labels = HDBSCAN(
-                min_cluster_size=min_cluster_size,
-                min_samples=min_samples,
-                metric="precomputed",
-                copy=True,
-            ).fit_predict(distances)
-            silhouette = silhouette_for_labels(values, labels, distance_matrix=distance_matrix)
-        else:
-            cluster_values = StandardScaler().fit_transform(values) if scale_clusters else values
-            labels = HDBSCAN(
-                min_cluster_size=min_cluster_size,
-                min_samples=min_samples,
-                copy=True,
-            ).fit_predict(cluster_values)
-            silhouette = silhouette_for_labels(cluster_values, labels)
-        return labels, silhouette, "hdbscan", {"min_cluster_size": min_cluster_size, "min_samples": min_samples}
+        labels, silhouette, meta = hdbscan_labels(values, distance_matrix=distance_matrix, scale_clusters=scale_clusters)
+        return labels, silhouette, "hdbscan", meta
 
     if cluster_method != "fixed":
         raise ValueError("Unknown clustering method.")
@@ -1653,11 +1690,17 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.flush()
 
                 try:
+                    send_event({"status": "Starting analysis..."})
                     result = analyze(payload, progress=lambda message: send_event({"status": message}))
                     send_event({"result": result})
+                except (BrokenPipeError, ConnectionResetError):
+                    return
                 except Exception as exc:
                     traceback.print_exc()
-                    send_event({"error": str(exc)})
+                    try:
+                        send_event({"error": str(exc)})
+                    except (BrokenPipeError, ConnectionResetError):
+                        return
                 return
 
             self.send_json(200, analyze(payload))
