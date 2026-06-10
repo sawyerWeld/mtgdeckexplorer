@@ -693,7 +693,16 @@ def parse_search_rows(source: str) -> list[dict]:
     return decks
 
 
-def parse_aliases(alias_text: str) -> dict[str, str]:
+SNOW_BASIC_ALIASES = {
+    "Snow-Covered Plains": "Plains",
+    "Snow-Covered Island": "Island",
+    "Snow-Covered Swamp": "Swamp",
+    "Snow-Covered Mountain": "Mountain",
+    "Snow-Covered Forest": "Forest",
+}
+
+
+def parse_aliases(alias_text: str, *, snow_basics_as_basics: bool = False) -> dict[str, str]:
     aliases: dict[str, str] = {}
 
     def display_name(name: str) -> str:
@@ -704,6 +713,10 @@ def parse_aliases(alias_text: str) -> dict[str, str]:
     def add_alias(name: str, canonical: str) -> None:
         aliases[name] = canonical
         aliases[name.casefold()] = canonical
+
+    if snow_basics_as_basics:
+        for name, canonical in SNOW_BASIC_ALIASES.items():
+            add_alias(name, canonical)
 
     for line in alias_text.splitlines():
         line = line.strip()
@@ -1526,7 +1539,10 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
         progress("Analyzing...")
 
     deck_ids = [deck["deck_id"] for deck in decks]
-    alias_map = parse_aliases(payload.get("aliases") or "")
+    alias_map = parse_aliases(
+        payload.get("aliases") or "",
+        snow_basics_as_basics=bool(payload.get("snowBasicsAsBasics")),
+    )
     scope = payload.get("scope") or "maindeck"
     min_decks = max(1, int(payload.get("minDecks") or 2))
     cluster_k = max(1, int(payload.get("clusterK") or 2))

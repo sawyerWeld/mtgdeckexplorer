@@ -10,6 +10,7 @@ const searchSideboardEl = document.querySelector("#searchSideboard");
 const searchDateStartEl = document.querySelector("#searchDateStart");
 const searchDateEndEl = document.querySelector("#searchDateEnd");
 const cardAliasesEl = document.querySelector("#cardAliases");
+const snowBasicsAsBasicsEl = document.querySelector("#snowBasicsAsBasics");
 const projectionEl = document.querySelector("#projection");
 const scopeEl = document.querySelector("#scope");
 const clusterSpaceEl = document.querySelector("#clusterSpace");
@@ -960,6 +961,7 @@ async function analyze() {
         source: "",
         search: collectSearchCriteria(),
         aliases: cardAliasesEl.value,
+        snowBasicsAsBasics: snowBasicsAsBasicsEl.checked,
         projection: projectionEl.value,
         scope: scopeEl.value,
         clusterSpace: clusterSpaceEl.value,
