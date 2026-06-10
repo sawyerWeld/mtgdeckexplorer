@@ -1101,6 +1101,26 @@ def projection_for_features(values: np.ndarray, projection: str) -> tuple[np.nda
     raise ValueError("Unknown projection.")
 
 
+def snap_duplicate_feature_coords(coords: np.ndarray, features: pd.DataFrame) -> tuple[np.ndarray, dict[str, int]]:
+    row_hashes = pd.util.hash_pandas_object(features, index=False).to_numpy()
+    duplicate_groups = 0
+    duplicate_decks = 0
+    snapped = np.array(coords, copy=True)
+
+    for row_hash in pd.unique(row_hashes):
+        indices = np.flatnonzero(row_hashes == row_hash)
+        if len(indices) < 2:
+            continue
+        duplicate_groups += 1
+        duplicate_decks += len(indices)
+        snapped[indices] = snapped[indices].mean(axis=0)
+
+    return snapped, {
+        "duplicate_feature_groups": duplicate_groups,
+        "duplicate_feature_decks": duplicate_decks,
+    }
+
+
 def silhouette_for_labels(values: np.ndarray, labels: np.ndarray, *, distance_matrix: np.ndarray | None = None) -> float | None:
     labels = np.asarray(labels)
     if len(labels) > SILHOUETTE_DECK_LIMIT:
@@ -1539,6 +1559,7 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
         raise ValueError("Need at least two variable card columns to plot.")
 
     coords, explained_variance, distance_matrix, projection_meta = projection_for_features(features.values, projection)
+    coords, duplicate_meta = snap_duplicate_feature_coords(coords, features)
     if cluster_space == "deck":
         cluster_values = features.values
         cluster_distance_matrix = distance_matrix
@@ -1609,6 +1630,7 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
         "diagnostics": {
             **input_meta,
             **projection_meta,
+            **duplicate_meta,
             "deck_count": len(decks),
             "card_columns": int(matrix.shape[1]),
             "feature_columns": int(features.shape[1]),

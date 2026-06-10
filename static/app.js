@@ -697,6 +697,7 @@ function renderResult(result) {
     metric("Decks", d.deck_count),
     metric("Cards", d.card_columns),
     metric("Features", d.feature_columns),
+    metric("Collapsed", d.duplicate_feature_decks || 0),
     metric("Cache", cacheValue),
     metric(xLabel, varianceMetric(d.explained_variance[0])),
     metric(yLabel, varianceMetric(d.explained_variance[1])),
