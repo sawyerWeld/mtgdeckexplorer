@@ -838,27 +838,49 @@ function dominantQty(card) {
   return best?.qty;
 }
 
+function formatConsensusPct(ratio) {
+  const value = Number(ratio || 0);
+  if (value <= 0) return "0%";
+  if (value >= 1) return "100%";
+  const pct = value * 100;
+  if (pct >= 99.5) return `${(Math.floor(pct * 10) / 10).toFixed(1)}%`;
+  if (pct < 0.1) return "<0.1%";
+  if (pct < 1) return `${(Math.floor(pct * 10) / 10).toFixed(1)}%`;
+  return `${Math.round(pct)}%`;
+}
+
 function qtyPills(card, n) {
   const dominant = dominantQty(card);
   const entries = distEntries(card)
     .filter((entry) => entry.qty > 0)
     .map((entry) => ({
       ...entry,
-      percent: n ? Math.round((entry.count / n) * 100) : 0,
+      ratio: n ? entry.count / n : 0,
     }));
-  const visible = entries.filter((entry) => entry.percent >= 5 || entry.qty === dominant).slice(0, 4);
+  const visible = entries.filter((entry) => entry.ratio >= 0.05 || entry.qty === dominant);
+  if (visible.length === 1 && entries.length > 1) {
+    const minority = entries
+      .filter((entry) => entry.qty !== dominant)
+      .sort((a, b) => b.ratio - a.ratio || b.qty - a.qty)[0];
+    if (minority) visible.push(minority);
+  }
+  visible.sort((a, b) => {
+    if (a.qty === dominant) return -1;
+    if (b.qty === dominant) return 1;
+    return b.ratio - a.ratio || b.qty - a.qty;
+  });
   return (visible.length ? visible : entries.slice(0, 1))
+    .slice(0, 4)
     .map((entry) => {
-      const percent = n ? Math.round((entry.count / n) * 100) : 0;
       const active = entry.qty === dominant ? " active" : "";
-      return `<span class="qty-pill${active}">x${entry.qty}<span>${percent}%</span></span>`;
+      return `<span class="qty-pill${active}">x${entry.qty}<span>${formatConsensusPct(entry.ratio)}</span></span>`;
     })
     .join("");
 }
 
 function archetypeCardRow(card, n, color) {
-  const playedPct = Math.round(Number(card.played_pct || 0) * 100);
-  const width = Math.max(3, playedPct);
+  const playedRatio = Number(card.played_pct || 0);
+  const width = Math.max(3, Math.min(100, playedRatio * 100));
   return `
     <div class="archetype-card-row">
       <div class="archetype-card-name">${escapeHtml(card.name)}</div>
@@ -867,7 +889,7 @@ function archetypeCardRow(card, n, color) {
         <div class="archetype-bar" aria-hidden="true">
           <span style="width:${width}%; background:${escapeHtml(color)}"></span>
         </div>
-        <span class="archetype-pct">${playedPct}%</span>
+        <span class="archetype-pct">${formatConsensusPct(playedRatio)}</span>
       </div>
     </div>
   `;
