@@ -849,7 +849,17 @@ function formatConsensusPct(ratio) {
   return `${Math.round(pct)}%`;
 }
 
-function qtyPills(card, n) {
+function formatAverageCopies(value) {
+  const numeric = Number(value || 0);
+  if (numeric <= 0) return "0";
+  const rounded = Math.round(numeric);
+  if (Math.abs(numeric - rounded) < 0.001) return String(rounded);
+  if (numeric < 1) return numeric.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  if (Math.abs(numeric - rounded) < 0.01) return numeric.toFixed(2);
+  return numeric.toFixed(1);
+}
+
+function copyDistributionSummary(card, n) {
   const dominant = dominantQty(card);
   const entries = distEntries(card)
     .filter((entry) => entry.qty > 0)
@@ -871,22 +881,24 @@ function qtyPills(card, n) {
   });
   return (visible.length ? visible : entries.slice(0, 1))
     .slice(0, 4)
-    .map((entry) => {
-      const active = entry.qty === dominant ? " active" : "";
-      return `<span class="qty-pill${active}">x${entry.qty}<span>${formatConsensusPct(entry.ratio)}</span></span>`;
-    })
-    .join("");
+    .map((entry) => `x${entry.qty} ${formatConsensusPct(entry.ratio)}`)
+    .join(", ");
 }
 
 function archetypeCardRow(card, n) {
   const playedRatio = Number(card.played_pct || 0);
+  const copySummary = [
+    `avg ${formatAverageCopies(card.avg)} copies`,
+    `${formatConsensusPct(playedRatio)} played`,
+    copyDistributionSummary(card, n),
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return `
-    <div class="archetype-card-row">
-      <div class="archetype-card-name">${escapeHtml(card.name)}</div>
-      <div class="archetype-card-stats">
-        <div class="qty-pills">${qtyPills(card, n)}</div>
-        <span class="archetype-pct">${formatConsensusPct(playedRatio)}</span>
-      </div>
+    <div class="decklist-row archetype-card-row" aria-label="${escapeHtml(copySummary)}">
+      <span class="decklist-count archetype-avg-count">${escapeHtml(formatAverageCopies(card.avg))}</span>
+      <span class="archetype-card-name">${escapeHtml(card.name)}</span>
+      ${manaCostSymbols(card.mana_cost)}
     </div>
   `;
 }
@@ -897,6 +909,7 @@ function archetypeSection(section, n, cluster) {
   const hiddenCards = section.cards.filter((card) => Number(card.played_pct || 0) <= 0.1);
   const visibleCards = expanded ? section.cards : section.cards.filter((card) => Number(card.played_pct || 0) > 0.1);
   const rows = visibleCards.map((card) => archetypeCardRow(card, n)).join("");
+  const total = section.cards.reduce((sum, card) => sum + Number(card.avg || 0), 0);
   const expandButton = hiddenCards.length
     ? `<button class="archetype-expand" type="button" data-section="${escapeHtml(sectionKey)}">${expanded ? "Collapse" : `Expand ${hiddenCards.length}`}</button>`
     : "";
@@ -904,7 +917,10 @@ function archetypeSection(section, n, cluster) {
     <section class="archetype-section" data-section="${escapeHtml(sectionKey)}">
       <div class="archetype-section-title">
         <span>${escapeHtml(section.label)}</span>
-        ${expandButton}
+        <span class="archetype-section-actions">
+          <span>${escapeHtml(formatAverageCopies(total))}</span>
+          ${expandButton}
+        </span>
       </div>
       ${rows || `<div class="cluster-detail">No cards.</div>`}
     </section>

@@ -840,6 +840,19 @@ def build_cluster_archetypes(
             }
         )
 
+    card_metadata = fetch_scryfall_card_metadata(
+        [
+            str(card["name"])
+            for cluster in cluster_archetypes
+            for section in cluster["sections"]
+            for card in section["cards"]
+        ]
+    )
+    for cluster in cluster_archetypes:
+        for section in cluster["sections"]:
+            for card in section["cards"]:
+                card["mana_cost"] = str(card_metadata.get(str(card["name"]), {}).get("mana_cost") or "")
+
     return cluster_archetypes
 
 

@@ -680,6 +680,13 @@ button:hover {
   padding: 5px 7px;
 }
 
+.archetype-section-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 .archetype-expand {
   background: #ffffff;
   border: 1px solid #d7dde6;
@@ -699,13 +706,17 @@ button:hover {
   border-top: 1px solid #f1f4f8;
   display: grid;
   gap: 7px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 25px;
-  padding: 2px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  min-height: 22px;
+  padding: 1px 2px;
 }
 
 .archetype-section-title + .archetype-card-row {
   border-top: 0;
+}
+
+.archetype-avg-count {
+  font-variant-numeric: tabular-nums;
 }
 
 .archetype-card-name {
@@ -715,58 +726,6 @@ button:hover {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.archetype-card-stats {
-  align-items: center;
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
-.qty-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  justify-content: flex-end;
-}
-
-.qty-pill {
-  background: #f7f9fc;
-  border: 1px solid #e3e8ef;
-  border-radius: 999px;
-  color: #364152;
-  display: inline-flex;
-  gap: 3px;
-  padding: 1px 6px;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.35;
-  white-space: nowrap;
-}
-
-.qty-pill span {
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.qty-pill.active {
-  background: #dde6f2;
-  border-color: #d0d9e7;
-}
-
-.archetype-pct {
-  background: #f7f9fc;
-  border: 1px solid #e3e8ef;
-  border-radius: 999px;
-  color: #364152;
-  font-size: 11px;
-  font-weight: 700;
-  min-width: 44px;
-  padding: 1px 6px;
-  text-align: right;
   white-space: nowrap;
 }
 
@@ -879,22 +838,5 @@ button:hover {
   .plot-legend {
     left: 12px;
     max-width: calc(100% - 24px);
-  }
-
-  .archetype-card-row {
-    grid-template-columns: 1fr;
-  }
-
-  .archetype-card-stats {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-
-  .qty-pills {
-    justify-content: flex-start;
-  }
-
-  .archetype-pct {
-    text-align: center;
   }
 }
