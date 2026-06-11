@@ -209,7 +209,7 @@ function clusterLabel(cluster) {
 }
 
 function cardWeightingLabel(weighting) {
-  if (weighting === "presence") return "presence";
+  if (weighting === "presence") return "binary";
   if (weighting === "raw") return "raw counts";
   return "sqrt counts";
 }
