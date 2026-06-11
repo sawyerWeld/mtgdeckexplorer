@@ -257,6 +257,14 @@ button:hover {
   width: 100%;
 }
 
+#analyzeButton[data-mode="cancel"] {
+  background: #b42318;
+}
+
+#analyzeButton[data-mode="cancel"]:hover {
+  background: #912018;
+}
+
 .controls-actions {
   background: var(--panel);
   border-top: 1px solid var(--soft-line);

@@ -51,6 +51,7 @@ FETCH_CACHE: dict[tuple[str, str], str] = {}
 SEARCH_OPTIONS_CACHE: dict[str, object] = {}
 SCRYFALL_CARD_COLORS: dict[str, list[str]] = {}
 SCRYFALL_CARD_METADATA: dict[str, dict[str, object]] = {}
+SCRYFALL_CARD_EXISTS: dict[str, bool] = {}
 COLOR_ORDER = ["W", "U", "B", "R", "G"]
 FALLBACK_ARCHETYPE_FORMATS = [
     "VI",
@@ -502,6 +503,11 @@ def build_search_form(criteria: dict) -> list[tuple[str, str]]:
     if sideboard:
         values.append(("SB_check", "1"))
     cards = str(criteria.get("cards") or "")
+    unknown_cards = validate_search_card_names(cards)
+    if unknown_cards:
+        card_text = ", ".join(unknown_cards)
+        raise ValueError(f"Unrecognized card name in Cards: {card_text}")
+
     card_lines = [line.strip() for line in re.split(r"\r?\n", cards) if line.strip()]
     normalized_cards = ("\r\n".join(card_lines) + "\r\n") if card_lines else ""
 
@@ -959,6 +965,67 @@ def metadata_from_scryfall_card(card: dict) -> dict[str, object]:
         "colors": colors_from_scryfall_card(card),
         "mana_cost": mana_cost_from_scryfall_card(card),
     }
+
+
+def fetch_scryfall_card_existence(card_names: list[str]) -> dict[str, bool]:
+    unique_names = sorted({name.strip() for name in card_names if name and name.strip()})
+    for name in unique_names:
+        if name in SCRYFALL_CARD_EXISTS:
+            continue
+        persisted = disk_cache_get(disk_cache_key("scryfall-card-exists-v1", name.lower()))
+        if persisted is None:
+            continue
+        SCRYFALL_CARD_EXISTS[name] = persisted == "1"
+
+    missing = [name for name in unique_names if name not in SCRYFALL_CARD_EXISTS]
+    for batch in batched(missing, 75):
+        body = json.dumps({"identifiers": [{"name": name} for name in batch]}).encode("utf-8")
+        request = Request(
+            SCRYFALL_COLLECTION,
+            data=body,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": USER_AGENT,
+            },
+        )
+        try:
+            with urlopen(request, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            raise ValueError("Could not validate card names with Scryfall. Try again in a moment.") from exc
+
+        found = {
+            str(card.get("name") or "").lower()
+            for card in payload.get("data", [])
+            if isinstance(card, dict)
+        }
+        not_found = {
+            str(identifier.get("name") or "").lower()
+            for identifier in payload.get("not_found", [])
+            if isinstance(identifier, dict)
+        }
+        for name in batch:
+            exists = name.lower() not in not_found and (name.lower() in found or bool(payload.get("data")))
+            SCRYFALL_CARD_EXISTS[name] = exists
+            disk_cache_set(
+                disk_cache_key("scryfall-card-exists-v1", name.lower()),
+                "1" if exists else "0",
+                SCRYFALL_COLOR_CACHE_TTL,
+            )
+
+        if len(missing) > 75:
+            time.sleep(0.55)
+
+    return {name: SCRYFALL_CARD_EXISTS.get(name, False) for name in unique_names}
+
+
+def validate_search_card_names(cards: str) -> list[str]:
+    card_lines = [line.strip() for line in re.split(r"\r?\n", cards) if line.strip()]
+    if not card_lines:
+        return []
+    existence = fetch_scryfall_card_existence(card_lines)
+    return [name for name in card_lines if not existence.get(name, False)]
 
 
 def fetch_scryfall_card_metadata(card_names: list[str]) -> dict[str, dict[str, object]]:
@@ -1639,9 +1706,9 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
         raise ValueError("Use the MTGTop8 search builder, or paste a search URL, compare URL, POST body, or saved HTML.")
 
     if search_criteria and not source_value:
+        form_data = build_search_form(search_criteria)
         if progress:
             progress("Fetching search page 1...")
-        form_data = build_search_form(search_criteria)
         source = fetch_url(f"{MTGTOP8}/search", data=form_data, stats=fetch_stats)
         source_kind = "search_builder"
         source_value = urlencode(form_data, doseq=True)

@@ -51,6 +51,7 @@ let plotView = null;
 let plotFrame = null;
 let plotDrag = null;
 let suppressPlotClickUntil = 0;
+let currentAnalysisController = null;
 let searchOptions = {
   formats: [{ value: "", label: "All" }],
   archetypes: {},
@@ -75,6 +76,11 @@ let aliasesTouched = false;
 function setStatus(text, kind = "idle") {
   statusEl.textContent = text;
   statusEl.dataset.kind = kind;
+}
+
+function setAnalyzeButtonRunning(running) {
+  analyzeButton.textContent = running ? "Cancel" : "Analyze";
+  analyzeButton.dataset.mode = running ? "cancel" : "analyze";
 }
 
 function updateClusterControls() {
@@ -1083,13 +1089,22 @@ function clearAnalysisView(summary = "Fetching decks...") {
 }
 
 async function analyze() {
+  if (currentAnalysisController) {
+    setStatus("Cancelling...");
+    currentAnalysisController.abort();
+    return;
+  }
+
+  const controller = new AbortController();
+  currentAnalysisController = controller;
   setStatus("Fetching...");
   clearAnalysisView();
-  analyzeButton.disabled = true;
+  setAnalyzeButtonRunning(true);
   try {
     const response = await fetch("/api/analyze-stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         source: "",
         search: collectSearchCriteria(),
@@ -1117,10 +1132,18 @@ async function analyze() {
       cache && Number(cache.total || 0) ? `Done · ${cache.hits} cached, ${cache.misses} fetched` : "Done";
     setStatus(cacheStatus);
   } catch (error) {
-    setStatus(error.message, "error");
-    summaryEl.textContent = "No plot generated for this search.";
+    if (error.name === "AbortError") {
+      setStatus("Cancelled.");
+      summaryEl.textContent = "Analysis cancelled.";
+    } else {
+      setStatus(error.message, "error");
+      summaryEl.textContent = "No plot generated for this search.";
+    }
   } finally {
-    analyzeButton.disabled = false;
+    if (currentAnalysisController === controller) {
+      currentAnalysisController = null;
+      setAnalyzeButtonRunning(false);
+    }
   }
 }
 
