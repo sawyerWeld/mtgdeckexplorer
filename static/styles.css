@@ -659,41 +659,53 @@ button:hover {
 
 .archetype-sections {
   display: grid;
-  gap: 13px;
+  gap: 14px;
 }
 
 .archetype-section {
   display: grid;
-  gap: 6px;
+  gap: 2px;
 }
 
 .archetype-section-title {
   align-items: center;
-  color: #364152;
+  background: #eef2f7;
+  border-radius: 4px;
+  color: #1f2937;
   display: flex;
   font-size: 12px;
   font-weight: 750;
   gap: 8px;
   justify-content: space-between;
+  padding: 5px 7px;
 }
 
 .archetype-expand {
-  background: #eef2f7;
+  background: #ffffff;
+  border: 1px solid #d7dde6;
+  border-radius: 999px;
   color: #364152;
   font-size: 11px;
   line-height: 1.2;
-  padding: 4px 7px;
+  padding: 3px 7px;
 }
 
 .archetype-expand:hover {
-  background: #dde6f2;
+  background: #f7f9fc;
 }
 
 .archetype-card-row {
-  align-items: start;
+  align-items: center;
+  border-top: 1px solid #f1f4f8;
   display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(110px, 1fr) minmax(210px, 1.5fr);
+  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 25px;
+  padding: 2px;
+}
+
+.archetype-section-title + .archetype-card-row {
+  border-top: 0;
 }
 
 .archetype-card-name {
@@ -701,14 +713,16 @@ button:hover {
   font-size: 12px;
   line-height: 1.25;
   min-width: 0;
-  padding-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .archetype-card-stats {
   align-items: center;
-  display: grid;
+  display: flex;
   gap: 6px;
-  grid-template-columns: minmax(84px, auto) minmax(54px, 1fr) 36px;
+  justify-content: flex-end;
   min-width: 0;
 }
 
@@ -716,18 +730,21 @@ button:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  justify-content: flex-end;
 }
 
 .qty-pill {
-  background: #eef2f7;
+  background: #f7f9fc;
+  border: 1px solid #e3e8ef;
   border-radius: 999px;
   color: #364152;
   display: inline-flex;
   gap: 3px;
-  padding: 2px 6px;
+  padding: 1px 6px;
   font-size: 11px;
   font-weight: 700;
   line-height: 1.35;
+  white-space: nowrap;
 }
 
 .qty-pill span {
@@ -737,25 +754,20 @@ button:hover {
 
 .qty-pill.active {
   background: #dde6f2;
-}
-
-.archetype-bar {
-  background: #eef2f7;
-  border-radius: 999px;
-  height: 7px;
-  overflow: hidden;
-}
-
-.archetype-bar span {
-  display: block;
-  height: 100%;
+  border-color: #d0d9e7;
 }
 
 .archetype-pct {
+  background: #f7f9fc;
+  border: 1px solid #e3e8ef;
+  border-radius: 999px;
   color: #364152;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  min-width: 44px;
+  padding: 1px 6px;
   text-align: right;
+  white-space: nowrap;
 }
 
 .axis text {
@@ -869,12 +881,20 @@ button:hover {
     max-width: calc(100% - 24px);
   }
 
-  .archetype-card-row,
-  .archetype-card-stats {
+  .archetype-card-row {
     grid-template-columns: 1fr;
   }
 
+  .archetype-card-stats {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .qty-pills {
+    justify-content: flex-start;
+  }
+
   .archetype-pct {
-    text-align: left;
+    text-align: center;
   }
 }

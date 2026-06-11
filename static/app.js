@@ -878,29 +878,25 @@ function qtyPills(card, n) {
     .join("");
 }
 
-function archetypeCardRow(card, n, color) {
+function archetypeCardRow(card, n) {
   const playedRatio = Number(card.played_pct || 0);
-  const width = Math.max(3, Math.min(100, playedRatio * 100));
   return `
     <div class="archetype-card-row">
       <div class="archetype-card-name">${escapeHtml(card.name)}</div>
       <div class="archetype-card-stats">
         <div class="qty-pills">${qtyPills(card, n)}</div>
-        <div class="archetype-bar" aria-hidden="true">
-          <span style="width:${width}%; background:${escapeHtml(color)}"></span>
-        </div>
         <span class="archetype-pct">${formatConsensusPct(playedRatio)}</span>
       </div>
     </div>
   `;
 }
 
-function archetypeSection(section, n, color, cluster) {
+function archetypeSection(section, n, cluster) {
   const sectionKey = `${cluster}:${section.key}`;
   const expanded = expandedArchetypeSections.has(sectionKey);
   const hiddenCards = section.cards.filter((card) => Number(card.played_pct || 0) <= 0.1);
   const visibleCards = expanded ? section.cards : section.cards.filter((card) => Number(card.played_pct || 0) > 0.1);
-  const rows = visibleCards.map((card) => archetypeCardRow(card, n, color)).join("");
+  const rows = visibleCards.map((card) => archetypeCardRow(card, n)).join("");
   const expandButton = hiddenCards.length
     ? `<button class="archetype-expand" type="button" data-section="${escapeHtml(sectionKey)}">${expanded ? "Collapse" : `Expand ${hiddenCards.length}`}</button>`
     : "";
@@ -940,7 +936,7 @@ function drawClusterInspector(result) {
 
   const color = clusterColor(selected.cluster);
   const sections = selected.sections.length
-    ? selected.sections.map((section) => archetypeSection(section, selected.n, color, selected.cluster)).join("")
+    ? selected.sections.map((section) => archetypeSection(section, selected.n, selected.cluster)).join("")
     : `<div class="cluster-detail">No card-level data for this cluster.</div>`;
 
   inspectorEl.innerHTML = `
