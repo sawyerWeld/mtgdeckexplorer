@@ -1593,6 +1593,19 @@ def resolve_outlier_mode(requested_mode: str, search_criteria: dict | None, sour
     return "keep"
 
 
+def resolve_card_weighting(value: object) -> str:
+    weighting = str(value or "sqrt")
+    return weighting if weighting in {"sqrt", "presence", "raw"} else "sqrt"
+
+
+def weighted_card_matrix(matrix: pd.DataFrame, weighting: str) -> pd.DataFrame:
+    if weighting == "presence":
+        return (matrix > 0).astype(float)
+    if weighting == "raw":
+        return matrix.copy()
+    return np.sqrt(matrix)
+
+
 def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dict:
     source_value = (payload.get("source") or "").strip()
     search_criteria = payload.get("search") if isinstance(payload.get("search"), dict) else None
@@ -1653,6 +1666,7 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
     cluster_k = max(1, int(payload.get("clusterK") or 2))
     scale_clusters = bool(payload.get("scaleClusters", True))
     projection = payload.get("projection") or "umap_braycurtis"
+    card_weighting = resolve_card_weighting(payload.get("cardWeighting"))
     cluster_method_requested = payload.get("clusterMethod") or "auto"
     cluster_space = str(payload.get("clusterSpace") or "plot")
     if cluster_space not in {"deck", "plot"}:
@@ -1673,9 +1687,10 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
     matrix = df.pivot_table(index="deck_id", columns="card_norm", values="copies", aggfunc="sum", fill_value=0)
     matrix = matrix.reindex(deck_ids, fill_value=0).astype(float)
     deck_totals = matrix.sum(axis=1).to_dict()
+    weighted_matrix = weighted_card_matrix(matrix, card_weighting)
 
     present = (matrix > 0).sum(axis=0)
-    features = matrix.loc[:, (present >= min_decks) & (matrix.var(axis=0) > 0)]
+    features = weighted_matrix.loc[:, (present >= min_decks) & (weighted_matrix.var(axis=0) > 0)]
     if features.shape[0] < 2:
         raise ValueError(f"Need at least two decks with {scope} card data to plot.")
     if features.shape[1] < 2:
@@ -1761,6 +1776,7 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
             "cluster_sizes": {str(key): int(value) for key, value in cluster_sizes.items()},
             "silhouette": silhouette,
             "scope": scope,
+            "card_weighting": card_weighting,
             "scale_clusters": scale_clusters,
             "cluster_method": cluster_method,
             "cluster_method_requested": cluster_method_requested,

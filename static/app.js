@@ -12,6 +12,7 @@ const searchDateEndEl = document.querySelector("#searchDateEnd");
 const cardAliasesEl = document.querySelector("#cardAliases");
 const snowBasicsAsBasicsEl = document.querySelector("#snowBasicsAsBasics");
 const projectionEl = document.querySelector("#projection");
+const cardWeightingEl = document.querySelector("#cardWeighting");
 const scopeEl = document.querySelector("#scope");
 const clusterSpaceEl = document.querySelector("#clusterSpace");
 const clusterMethodEl = document.querySelector("#clusterMethod");
@@ -205,6 +206,12 @@ function clusterColor(cluster) {
 
 function clusterLabel(cluster) {
   return Number(cluster) < 0 ? "Noise" : `Cluster ${Number(cluster) + 1}`;
+}
+
+function cardWeightingLabel(weighting) {
+  if (weighting === "presence") return "presence";
+  if (weighting === "raw") return "raw counts";
+  return "sqrt counts";
 }
 
 function paddedExtent(values) {
@@ -772,7 +779,7 @@ function renderResult(result) {
       ? `${d.distance_metric} ${d.cluster_method}`
       : `${d.scale_clusters ? "standardized" : "raw"} ${d.cluster_method}`;
   const clusterSpace = d.cluster_space === "plot" ? "plot-space" : "deck-space";
-  summaryEl.textContent = `${d.scope} · ${d.projection_label} · ${clusterSpace} ${clusterNote}`;
+  summaryEl.textContent = `${d.scope} · ${cardWeightingLabel(d.card_weighting)} · ${d.projection_label} · ${clusterSpace} ${clusterNote}`;
   ensureSelectedCluster(result);
   drawPlot(result);
   drawLegend(result);
@@ -1034,6 +1041,7 @@ async function analyze() {
         aliases: cardAliasesEl.value,
         snowBasicsAsBasics: snowBasicsAsBasicsEl.checked,
         projection: projectionEl.value,
+        cardWeighting: cardWeightingEl.value,
         scope: scopeEl.value,
         clusterSpace: clusterSpaceEl.value,
         clusterMethod: clusterMethodEl.value,
