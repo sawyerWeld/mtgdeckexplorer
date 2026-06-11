@@ -649,6 +649,25 @@ function manaPips(colors) {
   `;
 }
 
+const localManaSymbols = new Set(["W", "U", "B", "R", "G", "C"]);
+const scryfallManaSymbolNames = new Map([
+  ["\u221e", "INFINITY"],
+  ["\u00bd", "HALF"],
+]);
+
+function manaSymbolFilename(symbol) {
+  const normalized = String(symbol || "").trim().toUpperCase();
+  const mapped = scryfallManaSymbolNames.get(normalized) || normalized.replace(/\//g, "");
+  return /^[A-Z0-9]+$/.test(mapped) ? mapped : null;
+}
+
+function manaSymbolImage(symbol) {
+  const filename = manaSymbolFilename(symbol);
+  if (!filename) return "";
+  const src = localManaSymbols.has(filename) ? `/mana/${filename}.svg` : `https://svgs.scryfall.io/card-symbols/${filename}.svg`;
+  return `<img class="mana-cost-pip" src="${escapeHtml(src)}" alt="${escapeHtml(symbol)}" title="${escapeHtml(symbol)}" loading="lazy" referrerpolicy="no-referrer" />`;
+}
+
 function manaCostSymbols(manaCost) {
   const text = String(manaCost || "").trim();
   if (!text) return "";
@@ -669,9 +688,8 @@ function manaCostSymbols(manaCost) {
         .map((part) => {
           if (part.kind === "separator") return `<span class="mana-cost-separator">/</span>`;
           const symbol = String(part.value || "").toUpperCase();
-          if (/^[WUBRGC]$/.test(symbol)) {
-            return `<img class="mana-cost-pip" src="/mana/${escapeHtml(symbol)}.svg" alt="${escapeHtml(symbol)}" />`;
-          }
+          const image = manaSymbolImage(symbol);
+          if (image) return image;
           return `<span class="mana-cost-pip mana-cost-text">${escapeHtml(symbol)}</span>`;
         })
         .join("")}
