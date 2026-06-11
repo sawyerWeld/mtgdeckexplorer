@@ -1595,16 +1595,19 @@ def resolve_outlier_mode(requested_mode: str, search_criteria: dict | None, sour
 
 def resolve_card_weighting(value: object) -> str:
     weighting = str(value or "sqrt")
-    return weighting if weighting in {"sqrt", "heavy", "presence", "binary_idf", "raw"} else "sqrt"
+    return weighting if weighting in {"sqrt", "heavy", "presence", "binary_idf", "counts_idf", "raw"} else "sqrt"
 
 
 def weighted_card_matrix(matrix: pd.DataFrame, weighting: str) -> pd.DataFrame:
     presence = (matrix > 0).astype(float)
-    if weighting == "binary_idf":
+    if weighting in {"binary_idf", "counts_idf"}:
         deck_count = max(1, int(matrix.shape[0]))
         decks_with_card = presence.sum(axis=0)
         idf = np.log((1 + deck_count) / (1 + decks_with_card)) + 1
+    if weighting == "binary_idf":
         return presence.mul(idf, axis=1)
+    if weighting == "counts_idf":
+        return matrix.mul(idf, axis=1)
     if weighting == "heavy":
         return matrix.pow(0.25)
     if weighting == "presence":

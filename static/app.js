@@ -212,6 +212,7 @@ function cardWeightingLabel(weighting) {
   if (weighting === "heavy") return "heavy presence";
   if (weighting === "presence") return "binary";
   if (weighting === "binary_idf") return "binary + IDF";
+  if (weighting === "counts_idf") return "counts + IDF";
   if (weighting === "raw") return "raw counts";
   return "sqrt counts";
 }
