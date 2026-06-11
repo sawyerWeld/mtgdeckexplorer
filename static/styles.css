@@ -535,6 +535,17 @@ button:hover {
   margin: 0;
 }
 
+.decklist-section h3 {
+  align-items: center;
+  background: #eef2f7;
+  border-radius: 4px;
+  color: #1f2937;
+  display: flex;
+  font-weight: 750;
+  justify-content: space-between;
+  padding: 5px 7px;
+}
+
 .inspector-swatch {
   border-radius: 50%;
   display: block;
@@ -575,26 +586,75 @@ button:hover {
 
 .decklist {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .decklist-section {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .decklist-row {
+  align-items: center;
   display: grid;
-  gap: 8px;
-  grid-template-columns: 24px 1fr;
+  gap: 7px;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   font-size: 12px;
   line-height: 1.35;
+  min-height: 22px;
+  padding: 1px 2px;
 }
 
 .decklist-count {
   color: #364152;
   font-weight: 750;
   text-align: right;
+}
+
+.decklist-row > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mana-cost {
+  align-items: center;
+  display: inline-flex;
+  gap: 2px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.mana-cost-pip {
+  display: block;
+  flex: 0 0 auto;
+  height: 15px;
+  width: 15px;
+}
+
+.mana-cost-text {
+  align-items: center;
+  background: #d7dce3;
+  border: 1px solid #b7c0cc;
+  border-radius: 999px;
+  color: #111827;
+  display: inline-flex;
+  font-size: 9px;
+  font-weight: 750;
+  justify-content: center;
+  letter-spacing: 0;
+  line-height: 1;
+  min-width: 15px;
+  padding: 0 2px;
+  width: auto;
+}
+
+.mana-cost-separator {
+  color: #667085;
+  font-size: 10px;
+  font-weight: 750;
+  margin: 0 1px;
 }
 
 .archetype-sections {

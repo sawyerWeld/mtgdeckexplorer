@@ -50,6 +50,7 @@ SILHOUETTE_DECK_LIMIT = 3000
 FETCH_CACHE: dict[tuple[str, str], str] = {}
 SEARCH_OPTIONS_CACHE: dict[str, object] = {}
 SCRYFALL_CARD_COLORS: dict[str, list[str]] = {}
+SCRYFALL_CARD_METADATA: dict[str, dict[str, object]] = {}
 COLOR_ORDER = ["W", "U", "B", "R", "G"]
 FALLBACK_ARCHETYPE_FORMATS = [
     "VI",
@@ -868,6 +869,14 @@ def build_decklists(records: list[dict], deck_ids: list[str] | pd.Index) -> dict
             }
         deck_cards[key]["copies"] += copies
 
+    card_metadata = fetch_scryfall_card_metadata(
+        [
+            str(card["name"])
+            for deck_cards in cards_by_deck.values()
+            for card in deck_cards.values()
+        ]
+    )
+
     decklists: dict[str, list[dict]] = {}
     for deck_id in wanted:
         cards = sorted(
@@ -877,12 +886,23 @@ def build_decklists(records: list[dict], deck_ids: list[str] | pd.Index) -> dict
         sections = []
         for section, label in CLUSTER_ARCHETYPE_SECTIONS:
             section_cards = [
-                {"name": str(card["name"]), "copies": int(card["copies"])}
+                {
+                    "name": str(card["name"]),
+                    "copies": int(card["copies"]),
+                    "mana_cost": str(card_metadata.get(str(card["name"]), {}).get("mana_cost") or ""),
+                }
                 for card in cards
                 if card["section"] == section
             ]
             if section_cards:
-                sections.append({"key": section.lower().replace(" ", "_"), "label": label, "cards": section_cards})
+                sections.append(
+                    {
+                        "key": section.lower().replace(" ", "_"),
+                        "label": label,
+                        "total": sum(card["copies"] for card in section_cards),
+                        "cards": section_cards,
+                    }
+                )
         decklists[deck_id] = sections
 
     return decklists
@@ -909,22 +929,45 @@ def colors_from_scryfall_card(card: dict) -> list[str]:
     return sorted_colors(colors or [])
 
 
-def fetch_scryfall_card_colors(card_names: list[str]) -> dict[str, list[str]]:
+def mana_cost_from_scryfall_card(card: dict) -> str:
+    mana_cost = card.get("mana_cost")
+    if not mana_cost and isinstance(card.get("card_faces"), list):
+        face_costs = [
+            str(face.get("mana_cost") or "")
+            for face in card["card_faces"]
+            if str(face.get("mana_cost") or "").strip()
+        ]
+        mana_cost = " // ".join(face_costs)
+    return str(mana_cost or "")
+
+
+def metadata_from_scryfall_card(card: dict) -> dict[str, object]:
+    return {
+        "colors": colors_from_scryfall_card(card),
+        "mana_cost": mana_cost_from_scryfall_card(card),
+    }
+
+
+def fetch_scryfall_card_metadata(card_names: list[str]) -> dict[str, dict[str, object]]:
     unique_names = sorted({name for name in card_names if name})
     for name in unique_names:
-        if name in SCRYFALL_CARD_COLORS:
+        if name in SCRYFALL_CARD_METADATA:
             continue
-        persisted = disk_cache_get(disk_cache_key("scryfall-card-color-identity", name.lower()))
+        persisted = disk_cache_get(disk_cache_key("scryfall-card-metadata-v1", name.lower()))
         if persisted is None:
             continue
         try:
-            colors = json.loads(persisted)
+            metadata = json.loads(persisted)
         except json.JSONDecodeError:
             continue
-        if isinstance(colors, list):
-            SCRYFALL_CARD_COLORS[name] = [str(color) for color in colors]
+        if isinstance(metadata, dict):
+            colors = metadata.get("colors") if isinstance(metadata.get("colors"), list) else []
+            SCRYFALL_CARD_METADATA[name] = {
+                "colors": [str(color) for color in colors],
+                "mana_cost": str(metadata.get("mana_cost") or ""),
+            }
 
-    missing = [name for name in unique_names if name not in SCRYFALL_CARD_COLORS]
+    missing = [name for name in unique_names if name not in SCRYFALL_CARD_METADATA]
     for batch in batched(missing, 75):
         body = json.dumps({"identifiers": [{"name": name} for name in batch]}).encode("utf-8")
         request = Request(
@@ -941,12 +984,12 @@ def fetch_scryfall_card_colors(card_names: list[str]) -> dict[str, list[str]]:
                 payload = json.loads(response.read().decode("utf-8"))
         except Exception:
             for name in batch:
-                SCRYFALL_CARD_COLORS.setdefault(name, [])
+                SCRYFALL_CARD_METADATA.setdefault(name, {"colors": [], "mana_cost": ""})
             continue
 
-        found_by_name: dict[str, list[str]] = {}
+        found_by_name: dict[str, dict[str, object]] = {}
         for card in payload.get("data", []):
-            found_by_name[str(card.get("name") or "").lower()] = colors_from_scryfall_card(card)
+            found_by_name[str(card.get("name") or "").lower()] = metadata_from_scryfall_card(card)
 
         not_found = {
             str(identifier.get("name") or "").lower()
@@ -954,20 +997,34 @@ def fetch_scryfall_card_colors(card_names: list[str]) -> dict[str, list[str]]:
             if isinstance(identifier, dict)
         }
         for name in batch:
-            colors = found_by_name.get(name.lower(), [])
+            metadata = found_by_name.get(name.lower(), {"colors": [], "mana_cost": ""})
             if name.lower() in not_found:
-                colors = []
-            SCRYFALL_CARD_COLORS[name] = colors
+                metadata = {"colors": [], "mana_cost": ""}
+            colors = metadata.get("colors") if isinstance(metadata.get("colors"), list) else []
+            normalized_metadata = {
+                "colors": [str(color) for color in colors],
+                "mana_cost": str(metadata.get("mana_cost") or ""),
+            }
+            SCRYFALL_CARD_METADATA[name] = normalized_metadata
             disk_cache_set(
-                disk_cache_key("scryfall-card-color-identity", name.lower()),
-                json.dumps(colors),
+                disk_cache_key("scryfall-card-metadata-v1", name.lower()),
+                json.dumps(normalized_metadata),
                 SCRYFALL_COLOR_CACHE_TTL,
             )
 
         if len(missing) > 75:
             time.sleep(0.55)
 
-    return {name: SCRYFALL_CARD_COLORS.get(name, []) for name in unique_names}
+    return {name: SCRYFALL_CARD_METADATA.get(name, {"colors": [], "mana_cost": ""}) for name in unique_names}
+
+
+def fetch_scryfall_card_colors(card_names: list[str]) -> dict[str, list[str]]:
+    metadata = fetch_scryfall_card_metadata(card_names)
+    colors_by_card: dict[str, list[str]] = {}
+    for name, card_metadata in metadata.items():
+        colors = card_metadata.get("colors") if isinstance(card_metadata, dict) else []
+        colors_by_card[name] = [str(color) for color in colors] if isinstance(colors, list) else []
+    return colors_by_card
 
 
 def deck_colors_from_records(records: list[dict]) -> dict[str, list[str]]:

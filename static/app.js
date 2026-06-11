@@ -639,6 +639,36 @@ function manaPips(colors) {
   `;
 }
 
+function manaCostSymbols(manaCost) {
+  const text = String(manaCost || "").trim();
+  if (!text) return "";
+  const parts = [];
+  const pattern = /\{([^}]+)\}|\/\//g;
+  let match;
+  while ((match = pattern.exec(text))) {
+    if (match[0] === "//") {
+      parts.push({ kind: "separator", value: "//" });
+    } else {
+      parts.push({ kind: "symbol", value: match[1] });
+    }
+  }
+  if (!parts.length) return "";
+  return `
+    <span class="mana-cost" aria-label="Mana cost ${escapeHtml(text)}">
+      ${parts
+        .map((part) => {
+          if (part.kind === "separator") return `<span class="mana-cost-separator">/</span>`;
+          const symbol = String(part.value || "").toUpperCase();
+          if (/^[WUBRGC]$/.test(symbol)) {
+            return `<img class="mana-cost-pip" src="/mana/${escapeHtml(symbol)}.svg" alt="${escapeHtml(symbol)}" />`;
+          }
+          return `<span class="mana-cost-pip mana-cost-text">${escapeHtml(symbol)}</span>`;
+        })
+        .join("")}
+    </span>
+  `;
+}
+
 function hideTooltip() {
   tooltipEl.hidden = true;
 }
@@ -915,12 +945,16 @@ function decklistSection(section) {
       <div class="decklist-row">
         <span class="decklist-count">${escapeHtml(card.copies)}</span>
         <span>${escapeHtml(card.name)}</span>
+        ${manaCostSymbols(card.mana_cost)}
       </div>
     `)
     .join("");
   return `
     <section class="decklist-section">
-      <h3>${escapeHtml(section.label)}</h3>
+      <h3>
+        <span>${escapeHtml(section.label)}</span>
+        <span>${escapeHtml(section.total || "")}</span>
+      </h3>
       ${rows}
     </section>
   `;
