@@ -876,11 +876,9 @@ function formatConsensusPct(ratio) {
 function formatAverageCopies(value) {
   const numeric = Number(value || 0);
   if (numeric <= 0) return "0";
-  const rounded = Math.round(numeric);
-  if (Math.abs(numeric - rounded) < 0.001) return String(rounded);
-  if (numeric < 1) return numeric.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-  if (Math.abs(numeric - rounded) < 0.01) return numeric.toFixed(2);
-  return numeric.toFixed(1);
+  if (numeric < 0.01) return "<0.01";
+  const precision = numeric < 10 ? 2 : 1;
+  return numeric.toFixed(precision).replace(/\.?0+$/, "");
 }
 
 function copyDistributionSummary(card, n) {
