@@ -715,22 +715,23 @@ function hideCardPreview() {
   currentCardPreviewImage = "";
 }
 
-function positionCardPreview(clientX, clientY) {
+function positionCardPreview(anchorNode) {
   if (!cardPreviewEl || cardPreviewEl.hidden) return;
-  const rect = cardPreviewEl.getBoundingClientRect();
+  const anchorRect = anchorNode.getBoundingClientRect();
+  const previewRect = cardPreviewEl.getBoundingClientRect();
   const gap = 16;
   const edgePadding = 10;
-  let left = clientX - rect.width - gap;
-  let top = clientY + gap;
+  let left = anchorRect.left - previewRect.width - gap;
+  let top = anchorRect.top + anchorRect.height / 2 - previewRect.height / 2;
 
   if (left < edgePadding) {
-    left = clientX + gap;
+    left = anchorRect.right + gap;
   }
-  if (left + rect.width + edgePadding > window.innerWidth) {
-    left = window.innerWidth - rect.width - edgePadding;
+  if (left + previewRect.width + edgePadding > window.innerWidth) {
+    left = window.innerWidth - previewRect.width - edgePadding;
   }
-  if (top + rect.height + edgePadding > window.innerHeight) {
-    top = clientY - rect.height - gap;
+  if (top + previewRect.height + edgePadding > window.innerHeight) {
+    top = window.innerHeight - previewRect.height - edgePadding;
   }
   if (top < edgePadding) {
     top = edgePadding;
@@ -740,30 +741,32 @@ function positionCardPreview(clientX, clientY) {
   cardPreviewEl.style.top = `${Math.max(edgePadding, top)}px`;
 }
 
-function showCardPreview(node, event) {
+function showCardPreview(node) {
   if (!cardPreviewEl) return;
   const imageUrl = node.dataset.cardImage || "";
   if (!imageUrl) return;
   const cardName = node.dataset.cardName || "Card preview";
   if (currentCardPreviewImage !== imageUrl) {
     currentCardPreviewImage = imageUrl;
-    cardPreviewEl.innerHTML = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(cardName)}" />`;
+    const image = new Image();
+    image.alt = cardName;
+    image.src = imageUrl;
+    image.addEventListener("load", () => {
+      if (currentCardPreviewImage === imageUrl && !cardPreviewEl.hidden) {
+        positionCardPreview(node);
+      }
+    });
+    cardPreviewEl.replaceChildren(image);
   }
   cardPreviewEl.hidden = false;
-  if (event) {
-    positionCardPreview(event.clientX, event.clientY);
-  } else {
-    const rect = node.getBoundingClientRect();
-    positionCardPreview(rect.left, rect.top + rect.height / 2);
-  }
+  positionCardPreview(node);
 }
 
 function bindCardPreviewEvents(root) {
   root.querySelectorAll("[data-card-image]").forEach((node) => {
-    node.addEventListener("pointerenter", (event) => showCardPreview(node, event));
-    node.addEventListener("pointermove", (event) => showCardPreview(node, event));
+    node.addEventListener("pointerenter", () => showCardPreview(node));
     node.addEventListener("pointerleave", hideCardPreview);
-    node.addEventListener("focus", () => showCardPreview(node, null));
+    node.addEventListener("focus", () => showCardPreview(node));
     node.addEventListener("blur", hideCardPreview);
   });
 }
