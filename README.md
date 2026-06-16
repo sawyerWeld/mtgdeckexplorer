@@ -4,7 +4,7 @@ Local-first deck similarity plots for MTGTop8 search results.
 
 This is an unofficial fan tool for exploring Magic decklists. It recreates the MTGTop8 search sidebar, fetches matching decklists, projects them into a 2D similarity plot, and lets you inspect clusters as rough deck archetypes.
 
-![Pauper Elves UMAP example](screenshots/pauper-elves-umap-2026-06-10.png)
+![Pauper Affinity UMAP example](screenshots/affinity-writhing-chrysalis-umap-2026-06-16.png)
 
 ## What It Does
 
