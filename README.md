@@ -133,4 +133,4 @@ A hosted demo is possible, but it should probably use precomputed datasets or st
 
 This project is not affiliated with MTGTop8, Scryfall, Wizards of the Coast, or Hasbro. Card images and card data come from Scryfall. Tournament/deck data comes from MTGTop8.
 
-Pick a license before publishing the repository widely.
+MIT licensed. See `LICENSE`.
