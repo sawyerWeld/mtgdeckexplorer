@@ -1703,6 +1703,7 @@ def no_search_results_message(criteria: dict | None) -> str:
     date_end = str(criteria.get("dateEnd") or "").strip()
     main_deck = bool(criteria.get("mainDeck", True))
     sideboard = bool(criteria.get("sideboard", False))
+    event_source = normalize_event_source_filter(criteria.get("eventSource"))
 
     zones = []
     if main_deck:
@@ -2005,6 +2006,7 @@ class Handler(BaseHTTPRequestHandler):
         raw = file_path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
