@@ -1,6 +1,8 @@
 .cache/
 .deps/
+.venv/
+build/
+dist/
 __pycache__/
 *.py[cod]
 .DS_Store
-

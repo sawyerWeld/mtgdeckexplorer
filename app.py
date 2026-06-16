@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import argparse
 from collections import Counter
-from dataclasses import dataclass
 from collections.abc import Callable
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -19,6 +20,7 @@ import sys
 import time
 import traceback
 import warnings
+import webbrowser
 
 import numpy as np
 import pandas as pd
@@ -40,6 +42,7 @@ if DEPS_DIR.exists() and str(DEPS_DIR) not in sys.path:
 MTGTOP8 = "https://www.mtgtop8.com"
 SCRYFALL_COLLECTION = "https://api.scryfall.com/cards/collection"
 USER_AGENT = "Mozilla/5.0 mtgtop8-pca-local-tool"
+APP_NAME = "MTGTop8 Deck Explorer"
 DEFAULT_CACHE_TTL = object()
 MTGTOP8_SEARCH_CACHE_TTL = 7 * 24 * 60 * 60
 MTGTOP8_OTHER_CACHE_TTL = 24 * 60 * 60
@@ -115,6 +118,12 @@ ONLINE_EVENT_KEYWORDS = (
     "dpl online",
     "tropical",
 )
+STATIC_CONTENT_TYPES = {
+    ".css": "text/css",
+    ".html": "text/html",
+    ".js": "application/javascript",
+    ".svg": "image/svg+xml",
+}
 
 
 @dataclass
@@ -1996,13 +2005,7 @@ class Handler(BaseHTTPRequestHandler):
         if not str(file_path).startswith(str(STATIC.resolve())) or not file_path.exists():
             self.send_error(404)
             return
-        content_type = "text/html"
-        if file_path.suffix == ".css":
-            content_type = "text/css"
-        elif file_path.suffix == ".js":
-            content_type = "application/javascript"
-        elif file_path.suffix == ".svg":
-            content_type = "image/svg+xml"
+        content_type = STATIC_CONTENT_TYPES.get(file_path.suffix, "application/octet-stream")
         raw = file_path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_type)
@@ -2051,11 +2054,33 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(400, {"error": str(exc)})
 
 
-def main() -> None:
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"Serving MTGTop8 PCA app on http://127.0.0.1:{port}")
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=f"Run {APP_NAME} locally.")
+    parser.add_argument(
+        "legacy_port",
+        nargs="?",
+        type=int,
+        help="Optional port number. Kept for compatibility; prefer --port.",
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind. Defaults to 127.0.0.1.")
+    parser.add_argument("--port", type=int, default=None, help="Port to listen on. Defaults to 8765.")
+    parser.add_argument("--open", action="store_true", help="Open the app in the default browser after startup.")
+    return parser.parse_args(argv)
+
+
+def serve(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = False) -> None:
+    server = ThreadingHTTPServer((host, port), Handler)
+    url = f"http://{host}:{port}/"
+    print(f"Serving {APP_NAME} on {url}")
+    if open_browser:
+        webbrowser.open(url)
     server.serve_forever()
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
+    port = args.port if args.port is not None else args.legacy_port or 8765
+    serve(args.host, port, open_browser=args.open)
 
 
 if __name__ == "__main__":
