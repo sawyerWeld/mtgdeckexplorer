@@ -218,30 +218,6 @@ function clusterLabel(cluster) {
   return Number(cluster) < 0 ? "Noise" : `Cluster ${Number(cluster) + 1}`;
 }
 
-function cardWeightingLabel(weighting) {
-  if (weighting === "heavy") return "heavy presence";
-  if (weighting === "presence") return "binary";
-  if (weighting === "binary_idf") return "binary + IDF";
-  if (weighting === "counts_idf") return "counts + IDF";
-  if (weighting === "raw") return "raw counts";
-  return "sqrt counts";
-}
-
-function eventSourceLabel(d) {
-  const source = d.event_source_filter || "both";
-  if (source === "paper") return `Paper (${d.deck_count}/${d.reported_count || d.deck_count})`;
-  if (source === "online") return `Online (${d.deck_count}/${d.reported_count || d.deck_count})`;
-  const counts = d.event_source_counts || {};
-  if (Number(counts.online || 0)) return `Both (${counts.online} online)`;
-  return "Both";
-}
-
-function clusterCountLabel(d) {
-  const sizes = Object.entries(d.cluster_sizes || {}).filter(([cluster]) => Number(cluster) >= 0);
-  if (!sizes.length) return "0 clusters";
-  return `${sizes.length} ${sizes.length === 1 ? "cluster" : "clusters"}`;
-}
-
 function paddedExtent(values) {
   let min = Math.min(...values);
   let max = Math.max(...values);
@@ -852,16 +828,8 @@ function renderResult(result) {
   plotView = null;
   plotDrag = null;
   const d = result.diagnostics;
-  metricsEl.innerHTML = [
-    metric("Decks", d.deck_count),
-    metric("Source", eventSourceLabel(d)),
-    metric("Clusters", clusterCountLabel(d)),
-    metric("Top finishes", `${d.featured_decks}/${d.deck_count}`),
-  ].join("");
-  const noiseDecks = Number(d.noise_decks || 0);
-  const noiseNote = noiseDecks > 0 ? ` · ${noiseDecks} noise ${noiseDecks === 1 ? "deck" : "decks"}` : "";
-  const clusterSpace = d.cluster_space === "plot" ? "plot-space" : "deck-space";
-  summaryEl.textContent = `${d.scope} · ${cardWeightingLabel(d.card_weighting)} · ${d.projection_label} · ${clusterSpace} · ${clusterCountLabel(d)}${noiseNote}`;
+  metricsEl.innerHTML = metric("Decks", d.deck_count);
+  summaryEl.textContent = "";
   ensureSelectedCluster(result);
   drawPlot(result);
   drawLegend(result);
