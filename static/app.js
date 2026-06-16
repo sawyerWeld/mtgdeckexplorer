@@ -28,6 +28,7 @@ const plotZoomInButton = document.querySelector("#plotZoomIn");
 const plotZoomOutButton = document.querySelector("#plotZoomOut");
 const plotResetButton = document.querySelector("#plotReset");
 const tooltipEl = document.querySelector("#tooltip");
+const cardPreviewEl = document.querySelector("#cardPreview");
 const metricsEl = document.querySelector("#metrics");
 const summaryEl = document.querySelector("#summary");
 const legendEl = document.querySelector("#legend");
@@ -52,6 +53,7 @@ let plotFrame = null;
 let plotDrag = null;
 let suppressPlotClickUntil = 0;
 let currentAnalysisController = null;
+let currentCardPreviewImage = "";
 let searchOptions = {
   formats: [{ value: "", label: "All" }],
   archetypes: {},
@@ -707,6 +709,65 @@ function hideTooltip() {
   tooltipEl.hidden = true;
 }
 
+function hideCardPreview() {
+  if (!cardPreviewEl) return;
+  cardPreviewEl.hidden = true;
+  currentCardPreviewImage = "";
+}
+
+function positionCardPreview(clientX, clientY) {
+  if (!cardPreviewEl || cardPreviewEl.hidden) return;
+  const rect = cardPreviewEl.getBoundingClientRect();
+  const gap = 16;
+  const edgePadding = 10;
+  let left = clientX - rect.width - gap;
+  let top = clientY + gap;
+
+  if (left < edgePadding) {
+    left = clientX + gap;
+  }
+  if (left + rect.width + edgePadding > window.innerWidth) {
+    left = window.innerWidth - rect.width - edgePadding;
+  }
+  if (top + rect.height + edgePadding > window.innerHeight) {
+    top = clientY - rect.height - gap;
+  }
+  if (top < edgePadding) {
+    top = edgePadding;
+  }
+
+  cardPreviewEl.style.left = `${Math.max(edgePadding, left)}px`;
+  cardPreviewEl.style.top = `${Math.max(edgePadding, top)}px`;
+}
+
+function showCardPreview(node, event) {
+  if (!cardPreviewEl) return;
+  const imageUrl = node.dataset.cardImage || "";
+  if (!imageUrl) return;
+  const cardName = node.dataset.cardName || "Card preview";
+  if (currentCardPreviewImage !== imageUrl) {
+    currentCardPreviewImage = imageUrl;
+    cardPreviewEl.innerHTML = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(cardName)}" />`;
+  }
+  cardPreviewEl.hidden = false;
+  if (event) {
+    positionCardPreview(event.clientX, event.clientY);
+  } else {
+    const rect = node.getBoundingClientRect();
+    positionCardPreview(rect.left, rect.top + rect.height / 2);
+  }
+}
+
+function bindCardPreviewEvents(root) {
+  root.querySelectorAll("[data-card-image]").forEach((node) => {
+    node.addEventListener("pointerenter", (event) => showCardPreview(node, event));
+    node.addEventListener("pointermove", (event) => showCardPreview(node, event));
+    node.addEventListener("pointerleave", hideCardPreview);
+    node.addEventListener("focus", () => showCardPreview(node, null));
+    node.addEventListener("blur", hideCardPreview);
+  });
+}
+
 function bindPointEvents(points) {
   document.querySelectorAll(".point").forEach((node) => {
     const updateTooltip = (event) => {
@@ -907,6 +968,16 @@ function copyDistributionSummary(card, n) {
     .join(", ");
 }
 
+function cardPreviewAttributes(card) {
+  const imageUrl = String(card.image_url || "");
+  if (!imageUrl) return "";
+  return ` data-card-image="${escapeHtml(imageUrl)}" data-card-name="${escapeHtml(card.name || "Card preview")}" tabindex="0"`;
+}
+
+function cardRowClass(card, extra = "") {
+  return ["decklist-row", extra, card.image_url ? "card-preview-source" : ""].filter(Boolean).join(" ");
+}
+
 function archetypeCardRow(card, n) {
   const playedRatio = Number(card.played_pct || 0);
   const copySummary = [
@@ -917,7 +988,7 @@ function archetypeCardRow(card, n) {
     .filter(Boolean)
     .join(" · ");
   return `
-    <div class="decklist-row archetype-card-row" aria-label="${escapeHtml(copySummary)}">
+    <div class="${escapeHtml(cardRowClass(card, "archetype-card-row"))}" aria-label="${escapeHtml(copySummary)}"${cardPreviewAttributes(card)}>
       <span class="decklist-count archetype-avg-count">${escapeHtml(formatAverageCopies(card.avg))}</span>
       <span class="archetype-card-name">${escapeHtml(card.name)}</span>
       ${manaCostSymbols(card.mana_cost)}
@@ -1003,12 +1074,13 @@ function drawClusterInspector(result) {
       drawInspector(result);
     });
   });
+  bindCardPreviewEvents(inspectorEl);
 }
 
 function decklistSection(section) {
   const rows = section.cards
     .map((card) => `
-      <div class="decklist-row">
+      <div class="${escapeHtml(cardRowClass(card))}"${cardPreviewAttributes(card)}>
         <span class="decklist-count">${escapeHtml(card.copies)}</span>
         <span>${escapeHtml(card.name)}</span>
         ${manaCostSymbols(card.mana_cost)}
@@ -1057,9 +1129,11 @@ function drawDeckInspector(result) {
       <div class="decklist">${decklist.length ? decklist.map(decklistSection).join("") : `<div class="cluster-detail">No decklist rows.</div>`}</div>
     </section>
   `;
+  bindCardPreviewEvents(inspectorEl);
 }
 
 function drawInspector(result) {
+  hideCardPreview();
   if (!result) {
     inspectorEl.innerHTML = `<div class="inspector-empty">Run an analysis, then select a cluster or deck.</div>`;
     return;
@@ -1079,6 +1153,7 @@ function clearAnalysisView(summary = "Fetching decks...") {
   plotFrame = null;
   plotDrag = null;
   hideTooltip();
+  hideCardPreview();
   summaryEl.textContent = summary;
   metricsEl.innerHTML = "";
   legendEl.innerHTML = "";

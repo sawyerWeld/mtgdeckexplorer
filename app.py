@@ -857,7 +857,10 @@ def build_cluster_archetypes(
     for cluster in cluster_archetypes:
         for section in cluster["sections"]:
             for card in section["cards"]:
-                card["mana_cost"] = str(card_metadata.get(str(card["name"]), {}).get("mana_cost") or "")
+                metadata = card_metadata.get(str(card["name"]), empty_card_metadata())
+                card["mana_cost"] = str(metadata.get("mana_cost") or "")
+                card["image_url"] = str(metadata.get("image_url") or "")
+                card["scryfall_uri"] = str(metadata.get("scryfall_uri") or "")
 
     return cluster_archetypes
 
@@ -909,6 +912,8 @@ def build_decklists(records: list[dict], deck_ids: list[str] | pd.Index) -> dict
                     "name": str(card["name"]),
                     "copies": int(card["copies"]),
                     "mana_cost": str(card_metadata.get(str(card["name"]), {}).get("mana_cost") or ""),
+                    "image_url": str(card_metadata.get(str(card["name"]), {}).get("image_url") or ""),
+                    "scryfall_uri": str(card_metadata.get(str(card["name"]), {}).get("scryfall_uri") or ""),
                 }
                 for card in cards
                 if card["section"] == section
@@ -960,10 +965,47 @@ def mana_cost_from_scryfall_card(card: dict) -> str:
     return str(mana_cost or "")
 
 
+def image_url_from_scryfall_card(card: dict) -> str:
+    image_uris = card.get("image_uris")
+    if isinstance(image_uris, dict):
+        for key in ("normal", "large", "small"):
+            value = image_uris.get(key)
+            if value:
+                return str(value)
+    if isinstance(card.get("card_faces"), list):
+        for face in card["card_faces"]:
+            if not isinstance(face, dict):
+                continue
+            face_image_uris = face.get("image_uris")
+            if not isinstance(face_image_uris, dict):
+                continue
+            for key in ("normal", "large", "small"):
+                value = face_image_uris.get(key)
+                if value:
+                    return str(value)
+    return ""
+
+
 def metadata_from_scryfall_card(card: dict) -> dict[str, object]:
     return {
         "colors": colors_from_scryfall_card(card),
         "mana_cost": mana_cost_from_scryfall_card(card),
+        "image_url": image_url_from_scryfall_card(card),
+        "scryfall_uri": str(card.get("scryfall_uri") or ""),
+    }
+
+
+def empty_card_metadata() -> dict[str, object]:
+    return {"colors": [], "mana_cost": "", "image_url": "", "scryfall_uri": ""}
+
+
+def normalized_card_metadata(metadata: dict[str, object]) -> dict[str, object]:
+    colors = metadata.get("colors") if isinstance(metadata.get("colors"), list) else []
+    return {
+        "colors": [str(color) for color in colors],
+        "mana_cost": str(metadata.get("mana_cost") or ""),
+        "image_url": str(metadata.get("image_url") or ""),
+        "scryfall_uri": str(metadata.get("scryfall_uri") or ""),
     }
 
 
@@ -1033,7 +1075,7 @@ def fetch_scryfall_card_metadata(card_names: list[str]) -> dict[str, dict[str, o
     for name in unique_names:
         if name in SCRYFALL_CARD_METADATA:
             continue
-        persisted = disk_cache_get(disk_cache_key("scryfall-card-metadata-v1", name.lower()))
+        persisted = disk_cache_get(disk_cache_key("scryfall-card-metadata-v2", name.lower()))
         if persisted is None:
             continue
         try:
@@ -1041,11 +1083,7 @@ def fetch_scryfall_card_metadata(card_names: list[str]) -> dict[str, dict[str, o
         except json.JSONDecodeError:
             continue
         if isinstance(metadata, dict):
-            colors = metadata.get("colors") if isinstance(metadata.get("colors"), list) else []
-            SCRYFALL_CARD_METADATA[name] = {
-                "colors": [str(color) for color in colors],
-                "mana_cost": str(metadata.get("mana_cost") or ""),
-            }
+            SCRYFALL_CARD_METADATA[name] = normalized_card_metadata(metadata)
 
     missing = [name for name in unique_names if name not in SCRYFALL_CARD_METADATA]
     for batch in batched(missing, 75):
@@ -1064,7 +1102,7 @@ def fetch_scryfall_card_metadata(card_names: list[str]) -> dict[str, dict[str, o
                 payload = json.loads(response.read().decode("utf-8"))
         except Exception:
             for name in batch:
-                SCRYFALL_CARD_METADATA.setdefault(name, {"colors": [], "mana_cost": ""})
+                SCRYFALL_CARD_METADATA.setdefault(name, empty_card_metadata())
             continue
 
         found_by_name: dict[str, dict[str, object]] = {}
@@ -1077,17 +1115,13 @@ def fetch_scryfall_card_metadata(card_names: list[str]) -> dict[str, dict[str, o
             if isinstance(identifier, dict)
         }
         for name in batch:
-            metadata = found_by_name.get(name.lower(), {"colors": [], "mana_cost": ""})
+            metadata = found_by_name.get(name.lower(), empty_card_metadata())
             if name.lower() in not_found:
-                metadata = {"colors": [], "mana_cost": ""}
-            colors = metadata.get("colors") if isinstance(metadata.get("colors"), list) else []
-            normalized_metadata = {
-                "colors": [str(color) for color in colors],
-                "mana_cost": str(metadata.get("mana_cost") or ""),
-            }
+                metadata = empty_card_metadata()
+            normalized_metadata = normalized_card_metadata(metadata)
             SCRYFALL_CARD_METADATA[name] = normalized_metadata
             disk_cache_set(
-                disk_cache_key("scryfall-card-metadata-v1", name.lower()),
+                disk_cache_key("scryfall-card-metadata-v2", name.lower()),
                 json.dumps(normalized_metadata),
                 SCRYFALL_COLOR_CACHE_TTL,
             )
@@ -1095,7 +1129,7 @@ def fetch_scryfall_card_metadata(card_names: list[str]) -> dict[str, dict[str, o
         if len(missing) > 75:
             time.sleep(0.55)
 
-    return {name: SCRYFALL_CARD_METADATA.get(name, {"colors": [], "mana_cost": ""}) for name in unique_names}
+    return {name: SCRYFALL_CARD_METADATA.get(name, empty_card_metadata()) for name in unique_names}
 
 
 def fetch_scryfall_card_colors(card_names: list[str]) -> dict[str, list[str]]:
