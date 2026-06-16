@@ -3,6 +3,7 @@ const searchDeckEl = document.querySelector("#searchDeck");
 const searchPlayerEl = document.querySelector("#searchPlayer");
 const searchFormatEl = document.querySelector("#searchFormat");
 const searchArchetypeEl = document.querySelector("#searchArchetype");
+const searchEventSourceEl = document.querySelector("#searchEventSource");
 const levelChecksEl = document.querySelector("#levelChecks");
 const searchCardsEl = document.querySelector("#searchCards");
 const searchMainDeckEl = document.querySelector("#searchMainDeck");
@@ -194,6 +195,7 @@ function collectSearchCriteria() {
     player: searchPlayerEl.value.trim(),
     format: searchFormatEl.value,
     archetype: searchArchetypeEl.disabled ? "" : searchArchetypeEl.value,
+    eventSource: searchEventSourceEl.value,
     levels,
     cards: searchCardsEl.value.trim(),
     mainDeck: searchMainDeckEl.checked,
@@ -223,6 +225,15 @@ function cardWeightingLabel(weighting) {
   if (weighting === "counts_idf") return "counts + IDF";
   if (weighting === "raw") return "raw counts";
   return "sqrt counts";
+}
+
+function eventSourceLabel(d) {
+  const source = d.event_source_filter || "both";
+  if (source === "paper") return `Paper (${d.deck_count}/${d.reported_count || d.deck_count})`;
+  if (source === "online") return `Online (${d.deck_count}/${d.reported_count || d.deck_count})`;
+  const counts = d.event_source_counts || {};
+  if (Number(counts.online || 0)) return `Both (${counts.online} online)`;
+  return "Both";
 }
 
 function paddedExtent(values) {
@@ -845,6 +856,7 @@ function renderResult(result) {
   const yLabel = d.axis_labels?.[1] || "Axis 2";
   metricsEl.innerHTML = [
     metric("Decks", d.deck_count),
+    metric("Source", eventSourceLabel(d)),
     metric("Cards", d.card_columns),
     metric("Features", d.feature_columns),
     metric("Collapsed", d.duplicate_feature_decks || 0),

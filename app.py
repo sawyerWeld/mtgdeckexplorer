@@ -104,6 +104,17 @@ FALLBACK_LEVELS = [
     {"code": "C", "label": "Competitive", "checked": True},
     {"code": "R", "label": "Regular", "checked": True},
 ]
+ONLINE_EVENT_KEYWORDS = (
+    "mtgo",
+    "magic online",
+    "online",
+    "play point",
+    "fuguete",
+    "royale",
+    "empanadillahumana",
+    "dpl online",
+    "tropical",
+)
 
 
 @dataclass
@@ -232,6 +243,22 @@ def parse_star_cell(cell: str) -> tuple[int, bool]:
     if big_star and stars == 0:
         stars = 1
     return stars, big_star
+
+
+def classify_event_source(event: str, row_html: str = "") -> str:
+    titles = " ".join(
+        html.unescape(match.group(1))
+        for match in re.finditer(r"title=[\"']([^\"']+)[\"']", row_html, flags=re.I)
+    )
+    text = f"{event} {titles}".casefold()
+    if any(keyword in text for keyword in ONLINE_EVENT_KEYWORDS):
+        return "online"
+    return "paper"
+
+
+def normalize_event_source_filter(value: object) -> str:
+    source_filter = str(value or "both").casefold()
+    return source_filter if source_filter in {"both", "paper", "online"} else "both"
 
 
 FEATURED_FINISH_PERCENT = 0.02
@@ -689,6 +716,7 @@ def parse_search_rows(source: str) -> list[dict]:
                 "deck_name": deck_name,
                 "player": player,
                 "event": event,
+                "event_source": classify_event_source(event, row),
                 "rank": rank,
                 "date": date,
                 "deck_url": deck_url,
@@ -1575,8 +1603,11 @@ def collect_decks_and_cards(
     progress: Callable[[str], None] | None = None,
     fetch_stats: FetchStats | None = None,
     empty_search_message: str | None = None,
+    event_source_filter: str = "both",
 ) -> tuple[list[dict], list[dict], dict]:
     if find_compare_table(source) is not None:
+        if event_source_filter != "both":
+            raise ValueError("Paper/Online filtering needs MTGTop8 search results; compare pages do not include source data.")
         decks, records = parse_compare_html(source, source_value)
         return decks, records, {"input_type": "compare"}
 
@@ -1611,8 +1642,18 @@ def collect_decks_and_cards(
         for deck in parse_search_rows(page_html):
             search_decks_by_id.setdefault(deck["deck_id"], deck)
 
+    source_counts = Counter(str(deck.get("event_source") or "paper") for deck in search_decks_by_id.values())
+    if event_source_filter in {"paper", "online"}:
+        search_decks_by_id = {
+            deck_id: deck
+            for deck_id, deck in search_decks_by_id.items()
+            if str(deck.get("event_source") or "paper") == event_source_filter
+        }
+
     deck_ids = list(search_decks_by_id)
     if not deck_ids:
+        if event_source_filter in {"paper", "online"}:
+            raise ValueError(f"No {event_source_filter} decks found in the search results.")
         raise ValueError("No deck IDs found in the search results.")
 
     compare_decks: dict[str, dict] = {}
@@ -1633,7 +1674,15 @@ def collect_decks_and_cards(
     for deck_id in deck_ids:
         decks.append(merge_deck_meta(compare_decks.get(deck_id, {}), search_decks_by_id[deck_id]))
 
-    return decks, records, {"input_type": "search", "reported_count": total_count, "pages": page_count, "compare_batches": len(compare_batches)}
+    return decks, records, {
+        "input_type": "search",
+        "reported_count": total_count,
+        "pages": page_count,
+        "compare_batches": len(compare_batches),
+        "event_source_filter": event_source_filter,
+        "event_source_counts": {key: int(source_counts[key]) for key in sorted(source_counts)},
+        "filtered_deck_count": len(deck_ids),
+    }
 
 
 def criteria_search_intent(criteria: dict | None) -> tuple[bool, bool]:
@@ -1668,6 +1717,8 @@ def no_search_results_message(criteria: dict | None) -> str:
         details.append(f"with {card_text} in the {zone_text}")
     if format_name:
         details.append(f"in {format_name}")
+    if event_source in {"paper", "online"}:
+        details.append(f"from {event_source} events")
     if date_start or date_end:
         if date_start and date_end:
             details.append(f"from {date_start} to {date_end}")
@@ -1774,6 +1825,7 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
         progress,
         fetch_stats,
         empty_search_message=no_search_results_message(search_criteria),
+        event_source_filter=normalize_event_source_filter(search_criteria.get("eventSource") if search_criteria else None),
     )
     if not records:
         raise ValueError("No card rows found for the selected decks.")
