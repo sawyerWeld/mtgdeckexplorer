@@ -236,6 +236,12 @@ function eventSourceLabel(d) {
   return "Both";
 }
 
+function clusterCountLabel(d) {
+  const sizes = Object.entries(d.cluster_sizes || {}).filter(([cluster]) => Number(cluster) >= 0);
+  if (!sizes.length) return "0 clusters";
+  return `${sizes.length} ${sizes.length === 1 ? "cluster" : "clusters"}`;
+}
+
 function paddedExtent(values) {
   let min = Math.min(...values);
   let max = Math.max(...values);
@@ -388,10 +394,6 @@ function niceTicks(min, max, count = 6) {
 function axisLabel(label, value) {
   if (value == null) return label;
   return `${label} (${(Number(value || 0) * 100).toFixed(1)}%)`;
-}
-
-function varianceMetric(value) {
-  return value == null ? "n/a" : `${(Number(value || 0) * 100).toFixed(1)}%`;
 }
 
 function plotDensityMode(result = currentResult) {
@@ -850,39 +852,16 @@ function renderResult(result) {
   plotView = null;
   plotDrag = null;
   const d = result.diagnostics;
-  const cache = d.cache || {};
-  const cacheValue = Number(cache.total || 0) ? `${cache.hits}/${cache.total}` : "n/a";
-  const xLabel = d.axis_labels?.[0] || "Axis 1";
-  const yLabel = d.axis_labels?.[1] || "Axis 2";
   metricsEl.innerHTML = [
     metric("Decks", d.deck_count),
     metric("Source", eventSourceLabel(d)),
-    metric("Cards", d.card_columns),
-    metric("Features", d.feature_columns),
-    metric("Collapsed", d.duplicate_feature_decks || 0),
-    metric("Cache", cacheValue),
-    metric(xLabel, varianceMetric(d.explained_variance[0])),
-    metric(yLabel, varianceMetric(d.explained_variance[1])),
-    metric("Silhouette", d.silhouette == null ? "n/a" : d.silhouette.toFixed(3)),
-    metric("Big Top 2%", `${d.featured_decks}/${d.deck_count}`),
+    metric("Clusters", clusterCountLabel(d)),
+    metric("Top finishes", `${d.featured_decks}/${d.deck_count}`),
   ].join("");
   const noiseDecks = Number(d.noise_decks || 0);
   const noiseNote = noiseDecks > 0 ? ` · ${noiseDecks} noise ${noiseDecks === 1 ? "deck" : "decks"}` : "";
-  const outlierNote =
-    d.cluster_method === "auto-linkage" && d.outlier_mode_requested === "auto"
-      ? ` · auto outliers: ${d.outlier_mode === "noise" ? "noise" : "keep"}`
-      : "";
-  const autoFallbackNote = d.auto_fallback ? "auto fallback · " : "";
-  const clusterNote =
-    d.cluster_method === "auto-linkage"
-      ? `auto hierarchical · ${d.auto_clusters} clusters${noiseNote}${outlierNote} · min branch ${d.min_branch_size}`
-    : d.cluster_method === "hdbscan"
-      ? `${autoFallbackNote}HDBSCAN min ${d.min_cluster_size} · samples ${d.min_samples}`
-      : d.cluster_space === "deck" && d.distance_metric
-      ? `${d.distance_metric} ${d.cluster_method}`
-      : `${d.scale_clusters ? "standardized" : "raw"} ${d.cluster_method}`;
   const clusterSpace = d.cluster_space === "plot" ? "plot-space" : "deck-space";
-  summaryEl.textContent = `${d.scope} · ${cardWeightingLabel(d.card_weighting)} · ${d.projection_label} · ${clusterSpace} ${clusterNote}`;
+  summaryEl.textContent = `${d.scope} · ${cardWeightingLabel(d.card_weighting)} · ${d.projection_label} · ${clusterSpace} · ${clusterCountLabel(d)}${noiseNote}`;
   ensureSelectedCluster(result);
   drawPlot(result);
   drawLegend(result);
