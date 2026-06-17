@@ -55,6 +55,8 @@ let plotDrag = null;
 let suppressPlotClickUntil = 0;
 let currentAnalysisController = null;
 let currentCardPreviewImage = "";
+let cardPreviewHideTimer = null;
+const CARD_PREVIEW_HIDE_DELAY_MS = 300;
 let searchOptions = {
   formats: [{ value: "", label: "All" }],
   archetypes: {},
@@ -698,10 +700,25 @@ function hideTooltip() {
   tooltipEl.hidden = true;
 }
 
+function cancelCardPreviewHide() {
+  if (!cardPreviewHideTimer) return;
+  clearTimeout(cardPreviewHideTimer);
+  cardPreviewHideTimer = null;
+}
+
 function hideCardPreview() {
   if (!cardPreviewEl) return;
+  cancelCardPreviewHide();
   cardPreviewEl.hidden = true;
   currentCardPreviewImage = "";
+}
+
+function scheduleCardPreviewHide() {
+  if (!cardPreviewEl) return;
+  cancelCardPreviewHide();
+  cardPreviewHideTimer = window.setTimeout(() => {
+    hideCardPreview();
+  }, CARD_PREVIEW_HIDE_DELAY_MS);
 }
 
 function positionCardPreview(anchorNode) {
@@ -732,6 +749,7 @@ function positionCardPreview(anchorNode) {
 
 function showCardPreview(node) {
   if (!cardPreviewEl) return;
+  cancelCardPreviewHide();
   const imageUrl = node.dataset.cardImage || "";
   if (!imageUrl) return;
   const cardName = node.dataset.cardName || "Card preview";
@@ -754,9 +772,9 @@ function showCardPreview(node) {
 function bindCardPreviewEvents(root) {
   root.querySelectorAll("[data-card-image]").forEach((node) => {
     node.addEventListener("pointerenter", () => showCardPreview(node));
-    node.addEventListener("pointerleave", hideCardPreview);
+    node.addEventListener("pointerleave", scheduleCardPreviewHide);
     node.addEventListener("focus", () => showCardPreview(node));
-    node.addEventListener("blur", hideCardPreview);
+    node.addEventListener("blur", scheduleCardPreviewHide);
   });
 }
 
