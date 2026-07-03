@@ -54,6 +54,7 @@ Start with `Basic Settings`.
 - `From` defaults to `2026-01-01`; `To` defaults to today.
 - `Source` can limit the result set to paper or online events.
 - `Cards` searches for decks containing one or more card names.
+- Prefix a card with `-` to exclude decks containing it, such as `- Seeker of Skybreak`.
 - `Main deck` and `Sideboard` control where MTGTop8 searches for those cards.
 - `Scope` controls which card rows are used for the similarity model.
 

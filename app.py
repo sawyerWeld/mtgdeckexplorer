@@ -150,6 +150,12 @@ class FetchStats:
         }
 
 
+@dataclass(frozen=True)
+class CardSearchTerms:
+    include: list[str]
+    exclude: list[str]
+
+
 def disk_cache_key(namespace: str, *parts: object) -> str:
     raw = json.dumps(parts, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -496,6 +502,27 @@ def search_options_payload() -> dict:
     return payload
 
 
+def parse_card_search_terms(cards: str) -> CardSearchTerms:
+    include: list[str] = []
+    exclude: list[str] = []
+    for raw_line in str(cards or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("-"):
+            card = line[1:].strip()
+            if card:
+                exclude.append(card)
+            continue
+        include.append(line)
+    return CardSearchTerms(include=include, exclude=exclude)
+
+
+def normalized_cards_for_mtgtop8(cards: str) -> str:
+    card_lines = parse_card_search_terms(cards).include
+    return ("\r\n".join(card_lines) + "\r\n") if card_lines else ""
+
+
 def build_search_form(criteria: dict) -> list[tuple[str, str]]:
     if not isinstance(criteria, dict):
         criteria = {}
@@ -544,12 +571,9 @@ def build_search_form(criteria: dict) -> list[tuple[str, str]]:
         card_text = ", ".join(unknown_cards)
         raise ValueError(f"Unrecognized card name in Cards: {card_text}")
 
-    card_lines = [line.strip() for line in re.split(r"\r?\n", cards) if line.strip()]
-    normalized_cards = ("\r\n".join(card_lines) + "\r\n") if card_lines else ""
-
     values.extend(
         [
-            ("cards", normalized_cards),
+            ("cards", normalized_cards_for_mtgtop8(cards)),
             ("date_start", str(criteria.get("dateStart") or "")),
             ("date_end", str(criteria.get("dateEnd") or "")),
         ]
@@ -797,6 +821,64 @@ CLUSTER_ARCHETYPE_SECTIONS = [
     ("OTHER SPELLS", "Other Spells"),
     ("SIDEBOARDS", "Sideboard"),
 ]
+MAIN_DECK_SECTIONS = {"LANDS", "CREATURES", "OTHER SPELLS"}
+
+
+def selected_card_search_sections(criteria: dict | None) -> set[str]:
+    criteria = criteria if isinstance(criteria, dict) else {}
+    main_deck = bool(criteria.get("mainDeck", True))
+    sideboard = bool(criteria.get("sideboard", False))
+    if not main_deck and not sideboard:
+        main_deck = True
+
+    sections: set[str] = set()
+    if main_deck:
+        sections.update(MAIN_DECK_SECTIONS)
+    if sideboard:
+        sections.add("SIDEBOARDS")
+    return sections
+
+
+def filter_excluded_card_decks(
+    decks: list[dict],
+    records: list[dict],
+    excluded_cards: list[str],
+    criteria: dict | None,
+    aliases: dict[str, str],
+) -> tuple[list[dict], list[dict], dict]:
+    if not excluded_cards:
+        return decks, records, {"excluded_cards": [], "excluded_decks": 0}
+
+    excluded_names = {
+        canonical_card_name(card, aliases).casefold()
+        for card in excluded_cards
+        if str(card or "").strip()
+    }
+    if not excluded_names:
+        return decks, records, {"excluded_cards": [], "excluded_decks": 0}
+
+    wanted_sections = selected_card_search_sections(criteria)
+    excluded_deck_ids = {
+        str(record.get("deck_id") or "")
+        for record in records
+        if str(record.get("section") or "") in wanted_sections
+        and canonical_card_name(str(record.get("card") or ""), aliases).casefold() in excluded_names
+    }
+    excluded_deck_ids.discard("")
+
+    if not excluded_deck_ids:
+        return decks, records, {"excluded_cards": excluded_cards, "excluded_decks": 0}
+
+    filtered_decks = [deck for deck in decks if str(deck.get("deck_id") or "") not in excluded_deck_ids]
+    filtered_records = [
+        record
+        for record in records
+        if str(record.get("deck_id") or "") not in excluded_deck_ids
+    ]
+    return filtered_decks, filtered_records, {
+        "excluded_cards": excluded_cards,
+        "excluded_decks": len(excluded_deck_ids),
+    }
 
 
 def build_cluster_archetypes(
@@ -1100,7 +1182,8 @@ def fetch_scryfall_card_existence(card_names: list[str]) -> dict[str, bool]:
 
 
 def validate_search_card_names(cards: str) -> list[str]:
-    card_lines = [line.strip() for line in re.split(r"\r?\n", cards) if line.strip()]
+    terms = parse_card_search_terms(cards)
+    card_lines = [*terms.include, *terms.exclude]
     if not card_lines:
         return []
     existence = fetch_scryfall_card_existence(card_lines)
@@ -1707,6 +1790,7 @@ def no_search_results_message(criteria: dict | None) -> str:
         return "No MTGTop8 decks matched that search."
 
     cards = str(criteria.get("cards") or "").strip()
+    card_terms = parse_card_search_terms(cards)
     format_name = str(criteria.get("format") or "").strip()
     date_start = str(criteria.get("dateStart") or "").strip()
     date_end = str(criteria.get("dateEnd") or "").strip()
@@ -1722,9 +1806,12 @@ def no_search_results_message(criteria: dict | None) -> str:
     zone_text = " or ".join(zones) if zones else "selected zones"
 
     details = []
-    if cards:
-        card_text = ", ".join(line.strip() for line in re.split(r"\r?\n", cards) if line.strip())
+    if card_terms.include:
+        card_text = ", ".join(card_terms.include)
         details.append(f"with {card_text} in the {zone_text}")
+    if card_terms.exclude:
+        card_text = ", ".join(card_terms.exclude)
+        details.append(f"excluding {card_text} from the {zone_text}")
     if format_name:
         details.append(f"in {format_name}")
     if event_source in {"paper", "online"}:
@@ -1843,11 +1930,24 @@ def analyze(payload: dict, progress: Callable[[str], None] | None = None) -> dic
     if progress:
         progress("Analyzing...")
 
-    deck_ids = [deck["deck_id"] for deck in decks]
     alias_map = parse_aliases(
         payload.get("aliases") or "",
         snow_basics_as_basics=bool(payload.get("snowBasicsAsBasics")),
     )
+    card_terms = parse_card_search_terms(search_criteria.get("cards") if search_criteria else "")
+    decks, records, exclusion_meta = filter_excluded_card_decks(
+        decks,
+        records,
+        card_terms.exclude,
+        search_criteria,
+        alias_map,
+    )
+    input_meta.update(exclusion_meta)
+    if not records:
+        excluded_text = ", ".join(card_terms.exclude)
+        raise ValueError(f"No card rows left after excluding {excluded_text}.")
+
+    deck_ids = [deck["deck_id"] for deck in decks]
     scope = payload.get("scope") or "maindeck"
     min_decks = max(1, int(payload.get("minDecks") or 2))
     cluster_k = max(1, int(payload.get("clusterK") or 2))
