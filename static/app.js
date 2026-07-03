@@ -847,11 +847,23 @@ function renderResult(result) {
   plotDrag = null;
   const d = result.diagnostics;
   metricsEl.innerHTML = metric("Decks", d.deck_count);
-  summaryEl.textContent = "";
+  summaryEl.classList.toggle("analysis-note", Boolean(d.small_sample_projection));
+  summaryEl.textContent = projectionFallbackNote(d);
   ensureSelectedCluster(result);
   drawPlot(result);
   drawLegend(result);
   drawInspector(result);
+}
+
+function projectionFallbackNote(d) {
+  if (!d?.small_sample_projection) return "";
+  const deckCount = Number(d.deck_count || 0);
+  const deckText = deckCount === 1 ? "1 deck remained" : `${deckCount || "A tiny number of"} decks remained`;
+  const reason =
+    deckCount > 0 && deckCount <= 3
+      ? `${deckText} after filters, which is too small for a meaningful UMAP.`
+      : "UMAP could not build a stable neighbor graph for this result set.";
+  return `${reason} Showing Bray-Curtis PCoA instead.`;
 }
 
 function ensureSelectedCluster(result) {
@@ -1134,6 +1146,7 @@ function clearAnalysisView(summary = "Fetching decks...") {
   plotDrag = null;
   hideTooltip();
   hideCardPreview();
+  summaryEl.classList.remove("analysis-note");
   summaryEl.textContent = summary;
   metricsEl.innerHTML = "";
   legendEl.innerHTML = "";
