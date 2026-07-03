@@ -1344,6 +1344,15 @@ def pcoa(distance_matrix: np.ndarray) -> tuple[np.ndarray, list[float]]:
     return coords, explained
 
 
+def small_sample_projection(values: np.ndarray) -> tuple[np.ndarray, list[float], dict]:
+    distances = bray_curtis_distance_matrix(values)
+    coords, explained = pcoa(distances)
+    return coords, explained, {
+        "projection_fallback": "small-sample-bray-curtis-pcoa",
+        "small_sample_projection": True,
+    }
+
+
 def projection_for_features(values: np.ndarray, projection: str) -> tuple[np.ndarray, list[float | None], np.ndarray | None, dict]:
     if projection == "pca":
         pca = PCA(n_components=2, random_state=1)
@@ -1376,6 +1385,16 @@ def projection_for_features(values: np.ndarray, projection: str) -> tuple[np.nda
         }
 
     if projection == "umap_braycurtis":
+        if values.shape[0] <= 3:
+            coords, explained, fallback_meta = small_sample_projection(values)
+            return coords, explained, None, {
+                "projection": projection,
+                "projection_label": "Small-sample PCoA",
+                "axis_labels": ["PCoA1", "PCoA2"],
+                "distance_metric": "bray-curtis",
+                **fallback_meta,
+            }
+
         try:
             from umap import UMAP
         except Exception as exc:
@@ -1393,7 +1412,22 @@ def projection_for_features(values: np.ndarray, projection: str) -> tuple[np.nda
         )
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="n_jobs value .*")
-            coords = reducer.fit_transform(values)
+            try:
+                coords = reducer.fit_transform(values)
+            except ValueError as exc:
+                if "zero-size array" not in str(exc):
+                    raise
+                coords, explained, fallback_meta = small_sample_projection(values)
+                return coords, explained, None, {
+                    "projection": projection,
+                    "projection_label": "Small-sample PCoA",
+                    "axis_labels": ["PCoA1", "PCoA2"],
+                    "distance_metric": "bray-curtis",
+                    "umap_metric": "braycurtis",
+                    "umap_neighbors": n_neighbors,
+                    "umap_min_dist": 0.1,
+                    **fallback_meta,
+                }
         return coords, [None, None], None, {
             "projection": projection,
             "projection_label": "UMAP",
