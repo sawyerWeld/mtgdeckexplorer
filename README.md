@@ -78,6 +78,24 @@ The app stores fetched data in `.cache/cache.sqlite3`.
 
 This cache is intentional: it keeps the app responsive and avoids repeatedly hitting MTGTop8 for the same searches. Prefer narrowing huge searches with format, date, source, card, or archetype filters.
 
+## Small-Team Hosting
+
+For a short event, you can run the app on a Mac and share it through a private network or tunnel. Use Basic Auth when exposing it beyond your own machine:
+
+```bash
+MTGDECKEXPLORER_AUTH_USER=pauper \
+MTGDECKEXPLORER_AUTH_PASSWORD='shared-password-here' \
+python app.py --host 127.0.0.1 --port 8788
+```
+
+Then put a tunnel, reverse proxy, or Tailscale Funnel in front of `http://127.0.0.1:8788`. Keep the group small, leave the cache intact, and ask people to avoid repeatedly running huge all-format searches.
+
+For example, a Tailscale Funnel can be turned off later with:
+
+```bash
+tailscale funnel --https=10000 off
+```
+
 To clear all local cached data:
 
 ```bash

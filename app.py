@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -10,9 +11,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, parse_qsl, urlencode, unquote, urlparse
 from urllib.request import Request, urlopen
 import hashlib
+import hmac
 import html
 import json
 import math
+import os
 import re
 import shlex
 import sqlite3
@@ -124,6 +127,32 @@ STATIC_CONTENT_TYPES = {
     ".js": "application/javascript",
     ".svg": "image/svg+xml",
 }
+
+
+def auth_config() -> tuple[str, str] | None:
+    password = os.environ.get("MTGDECKEXPLORER_AUTH_PASSWORD") or os.environ.get("MTGDECKEXPLORER_PASSWORD")
+    if not password:
+        return None
+    user = os.environ.get("MTGDECKEXPLORER_AUTH_USER") or os.environ.get("MTGDECKEXPLORER_USER") or "pauper"
+    return user, password
+
+
+def valid_basic_auth(header: str | None) -> bool:
+    config = auth_config()
+    if config is None:
+        return True
+    expected_user, expected_password = config
+    scheme, _, encoded = (header or "").partition(" ")
+    if scheme.casefold() != "basic" or not encoded:
+        return False
+    try:
+        decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return False
+    user, separator, password = decoded.partition(":")
+    if not separator:
+        return False
+    return hmac.compare_digest(user, expected_user) and hmac.compare_digest(password, expected_password)
 
 
 @dataclass
@@ -2120,6 +2149,18 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         sys.stdout.write(format % args + "\n")
 
+    def authorized(self) -> bool:
+        if valid_basic_auth(self.headers.get("Authorization")):
+            return True
+        body = b"Authentication required.\n"
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", f'Basic realm="{APP_NAME}"')
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        return False
+
     def send_json(self, status: int, body: dict) -> None:
         raw = json.dumps(body).encode("utf-8")
         self.send_response(status)
@@ -2129,6 +2170,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_GET(self) -> None:
+        if not self.authorized():
+            return
         path = urlparse(self.path).path
         if path == "/api/search-options":
             self.send_json(200, search_options_payload())
@@ -2149,6 +2192,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_POST(self) -> None:
+        if not self.authorized():
+            return
         path = urlparse(self.path).path
         if path not in {"/api/analyze", "/api/analyze-stream"}:
             self.send_error(404)
