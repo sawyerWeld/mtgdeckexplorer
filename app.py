@@ -510,14 +510,17 @@ def parse_search_options(source: str) -> dict:
 
 
 def search_options_payload() -> dict:
+    def has_archetypes(payload: dict) -> bool:
+        return bool(payload.get("archetypes"))
+
     cached = SEARCH_OPTIONS_CACHE.get("payload")
-    if isinstance(cached, dict):
+    if isinstance(cached, dict) and has_archetypes(cached):
         return cached
     persisted = disk_cache_get(disk_cache_key("search-options"))
     if persisted is not None:
         try:
             payload = json.loads(persisted)
-            if isinstance(payload, dict):
+            if isinstance(payload, dict) and has_archetypes(payload):
                 SEARCH_OPTIONS_CACHE["payload"] = payload
                 return payload
         except json.JSONDecodeError:
@@ -526,8 +529,9 @@ def search_options_payload() -> dict:
         payload = parse_search_options(fetch_url(f"{MTGTOP8}/search", ttl_seconds=SEARCH_OPTIONS_CACHE_TTL))
     except Exception:
         payload = {"formats": FALLBACK_FORMATS, "archetypes": {}, "levels": FALLBACK_LEVELS}
-    SEARCH_OPTIONS_CACHE["payload"] = payload
-    disk_cache_set(disk_cache_key("search-options"), json.dumps(payload), SEARCH_OPTIONS_CACHE_TTL)
+    if has_archetypes(payload):
+        SEARCH_OPTIONS_CACHE["payload"] = payload
+        disk_cache_set(disk_cache_key("search-options"), json.dumps(payload), SEARCH_OPTIONS_CACHE_TTL)
     return payload
 
 
